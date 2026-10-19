@@ -5,6 +5,7 @@ import { FiBell, FiTrash2, FiX } from 'react-icons/fi';
 import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPrice } from '@/lib/format';
+import { isAlertTriggered } from '@/lib/alerts';
 import type { PriceAlert } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
@@ -33,13 +34,11 @@ export default function MarketAlerts() {
     () =>
       alerts.map((alert) => {
         const currentPrice = coins.get(alert.cryptoId)?.current_price;
-        const triggered =
-          currentPrice === undefined
-            ? false
-            : alert.direction === 'above'
-              ? currentPrice >= alert.targetPrice
-              : currentPrice <= alert.targetPrice;
-        return { ...alert, currentPrice, triggered };
+        return {
+          ...alert,
+          currentPrice,
+          triggered: isAlertTriggered(alert.direction, alert.targetPrice, currentPrice),
+        };
       }),
     [alerts, coins]
   );

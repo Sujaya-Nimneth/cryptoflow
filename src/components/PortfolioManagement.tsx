@@ -5,6 +5,7 @@ import { FiPlus, FiTrash2 } from 'react-icons/fi';
 import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPercent, formatPrice, formatQuantity, formatSignedPrice } from '@/lib/format';
+import { computeAllocation, computeRows, computeStats } from '@/lib/portfolio';
 import type { PortfolioHolding } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
@@ -34,39 +35,18 @@ export default function PortfolioManagement() {
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
   const { coins, loading } = useMarketCoins(ids);
 
-  const rows = useMemo(
+  const prices = useMemo(
     () =>
-      holdings.map((holding) => {
-        const currentPrice = coins.get(holding.cryptoId)?.current_price ?? holding.purchasePrice;
-        const invested = holding.quantity * holding.purchasePrice;
-        const value = holding.quantity * currentPrice;
-        const gainLoss = value - invested;
-        const gainLossPercent = invested > 0 ? (gainLoss / invested) * 100 : 0;
-        return { ...holding, currentPrice, invested, value, gainLoss, gainLossPercent };
-      }),
-    [holdings, coins]
+      new Map(
+        [...coins.entries()].map(([id, coin]) => [id, coin.current_price] as const)
+      ),
+    [coins]
   );
 
-  const stats = useMemo(() => {
-    const totalInvestment = rows.reduce((sum, row) => sum + row.invested, 0);
-    const currentValue = rows.reduce((sum, row) => sum + row.value, 0);
-    const totalReturn = currentValue - totalInvestment;
-    return {
-      totalInvestment,
-      currentValue,
-      totalReturn,
-      returnPercentage: totalInvestment > 0 ? (totalReturn / totalInvestment) * 100 : 0,
-    };
-  }, [rows]);
-
+  const rows = useMemo(() => computeRows(holdings, prices), [holdings, prices]);
+  const stats = useMemo(() => computeStats(rows), [rows]);
   const allocation = useMemo(
-    () =>
-      [...rows]
-        .sort((a, b) => b.value - a.value)
-        .map((row) => ({
-          ...row,
-          share: stats.currentValue > 0 ? (row.value / stats.currentValue) * 100 : 0,
-        })),
+    () => computeAllocation(rows, stats.currentValue),
     [rows, stats.currentValue]
   );
 
