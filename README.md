@@ -14,7 +14,7 @@ A professional-grade, real-time cryptocurrency analytics dashboard built with Ne
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: Next.js 15+ with App Router
+- **Frontend**: Next.js 16 with App Router
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **Charts**: Chart.js with react-chartjs-2
@@ -22,7 +22,6 @@ A professional-grade, real-time cryptocurrency analytics dashboard built with Ne
 - **State Management**: React Hooks
 - **Backend**: REST API (CoinGecko)
 - **Database**: Supabase (PostgreSQL)
-- **HTTP Client**: Axios
 
 ## 📋 Prerequisites
 
@@ -40,12 +39,13 @@ npm install
 
 ### 2. Configure Environment Variables
 
-Create a `.env.local` file in the root directory:
+Copy `.env.example` to `.env.local`. Every variable is optional — without Supabase
+credentials the app runs fully client-side and skips persistence.
 
 ```env
+NEXT_PUBLIC_CRYPTO_API_URL=https://api.coingecko.com/api/v3
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_CRYPTO_API_URL=https://api.coingecko.com/api/v3
 ```
 
 ### 3. Set Up Supabase Database (Optional)
@@ -101,22 +101,36 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ```
 src/
 ├── app/
-│   ├── layout.tsx         # Root layout with dark theme
-│   ├── page.tsx           # Main dashboard with tab navigation
-│   └── globals.css        # Global styles
+│   ├── layout.tsx         # Root layout, metadata and viewport
+│   ├── page.tsx           # Server shell with header/footer
+│   ├── loading.tsx        # Route-level loading skeleton
+│   ├── error.tsx          # Route-level error boundary
+│   ├── not-found.tsx      # 404 page
+│   └── globals.css        # Tailwind theme and global styles
 ├── components/
-│   ├── LivePriceTracker.tsx    # Real-time price cards
-│   ├── PriceCard.tsx            # Individual price card component
-│   ├── CandleStickChart.tsx     # Interactive price charts
+│   ├── DashboardTabs.tsx        # URL-driven tab navigation, lazy panels
+│   ├── DashboardPanel.tsx       # Prices, market overview and chart
+│   ├── LivePriceTracker.tsx     # Auto-refreshing price grid
+│   ├── PriceCard.tsx            # Individual price card
+│   ├── CandleStickChart.tsx     # OHLC candlestick chart
+│   ├── MarketOverview.tsx       # Global market statistics
 │   ├── PortfolioManagement.tsx  # Portfolio tracking and analytics
-│   ├── Watchlist.tsx            # Watchlist with top gainers  
-│   └── MarketAlerts.tsx         # Alert management
+│   ├── Watchlist.tsx            # Watchlist with live prices
+│   ├── MarketAlerts.tsx         # Price alert management
+│   ├── LastUpdated.tsx          # Mount-safe local clock
+│   └── ui/                      # Card, Button, Field, StatTile, …
+├── hooks/
+│   └── useMarketCoins.ts  # Shared live quote loader
 ├── lib/
-│   ├── cryptoApi.ts       # CoinGecko API client
-│   └── supabase.ts        # Supabase database functions
+│   ├── cryptoApi.ts       # CoinGecko client (native fetch)
+│   ├── coins.ts           # Supported coin catalog
+│   ├── format.ts          # Shared Intl formatters
+│   ├── portfolio.ts       # Portfolio math (unit tested)
+│   ├── alerts.ts          # Alert evaluation (unit tested)
+│   └── supabase.ts        # Optional Supabase persistence
 ├── types/
 │   └── index.ts           # TypeScript interfaces
-└── .env.local             # Environment variables
+└── .env.local             # Environment variables (see .env.example)
 ```
 
 ## 🎨 Features in Detail
@@ -179,7 +193,8 @@ const interval = setInterval(fetchPrices, 30000); // 30 seconds
 ```
 
 ### Customize Colors
-Edit Tailwind classes in component files or update `tailwind.config.ts`
+Theme tokens live in the `@theme` block of `src/app/globals.css` (Tailwind CSS v4 has no
+`tailwind.config.ts`). Component-level colors use standard Tailwind utilities.
 
 ## 🚀 Deployment
 
@@ -195,6 +210,19 @@ vercel deploy
 1. Build the project: `npm run build`
 2. Deploy the `.next` folder to your hosting provider
 3. Set environment variables on your hosting platform
+
+## 🧪 Scripts
+
+```bash
+npm run dev        # Start the dev server
+npm run build      # Production build
+npm run lint       # ESLint
+npm run typecheck  # tsc --noEmit
+npm test           # Vitest unit tests
+```
+
+CI runs typecheck, lint, tests and build on every push and pull request
+(see `.github/workflows/ci.yml`).
 
 ## 🔒 Security Notes
 
