@@ -1,250 +1,265 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FiBell, FiTrash2, FiX } from 'react-icons/fi';
+import { useMarketPrices } from '@/hooks/useMarketPrices';
+import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
+import { formatPrice } from '@/lib/format';
+import type { PriceAlert } from '@/types';
+import { Button, IconButton } from './ui/Button';
+import { Card, CardHeader } from './ui/Card';
+import { EmptyState } from './ui/EmptyState';
+import { Field, Input, Select } from './ui/Field';
+import { StatTile } from './ui/StatTile';
 
-interface Alert {
-  id: string;
-  cryptoName: string;
-  cryptoSymbol: string;
-  alertType: 'above' | 'below';
-  targetPrice: number;
-  currentPrice: number;
-  isTriggered: boolean;
-  createdAt: string;
+interface DraftAlert {
+  cryptoId: string;
+  direction: 'above' | 'below';
+  targetPrice: string;
 }
 
+const EMPTY_DRAFT: DraftAlert = { cryptoId: 'bitcoin', direction: 'above', targetPrice: '' };
+
 export default function MarketAlerts() {
-  const [alerts, setAlerts] = useState<Alert[]>([
-    {
-      id: '1',
-      cryptoName: 'Bitcoin',
-      cryptoSymbol: 'BTC',
-      alertType: 'above',
-      targetPrice: 50000,
-      currentPrice: 45000,
-      isTriggered: false,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      cryptoName: 'Ethereum',
-      cryptoSymbol: 'ETH',
-      alertType: 'below',
-      targetPrice: 2000,
-      currentPrice: 2500,
-      isTriggered: false,
-      createdAt: new Date().toISOString(),
-    },
-  ]);
-
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    crypto: '',
-    alertType: 'above' as 'above' | 'below',
-    targetPrice: '',
-  });
+  const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const handleAddAlert = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.crypto || !formData.targetPrice) return;
+  const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
+  const { prices, loading } = useMarketPrices(ids);
 
-    const newAlert: Alert = {
-      id: Date.now().toString(),
-      cryptoName: formData.crypto,
-      cryptoSymbol: formData.crypto.toUpperCase().slice(0, 3),
-      alertType: formData.alertType,
-      targetPrice: parseFloat(formData.targetPrice),
-      currentPrice: 0,
-      isTriggered: false,
-      createdAt: new Date().toISOString(),
-    };
+  const evaluated = useMemo(
+    () =>
+      alerts.map((alert) => {
+        const currentPrice = prices.get(alert.cryptoId);
+        const triggered =
+          currentPrice === undefined
+            ? false
+            : alert.direction === 'above'
+              ? currentPrice >= alert.targetPrice
+              : currentPrice <= alert.targetPrice;
+        return { ...alert, currentPrice, triggered };
+      }),
+    [alerts, prices]
+  );
 
-    setAlerts([...alerts, newAlert]);
-    setFormData({ crypto: '', alertType: 'above', targetPrice: '' });
-    setShowForm(false);
-  };
+  const triggeredCount = evaluated.filter((alert) => alert.triggered).length;
 
-  const deleteAlert = (id: string) => {
-    setAlerts(alerts.filter((alert) => alert.id !== id));
-  };
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const targetPrice = Number(draft.targetPrice);
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-    }).format(price);
-  };
-
-  const getAlertStatus = (alert: Alert) => {
-    if (alert.alertType === 'above') {
-      return alert.currentPrice >= alert.targetPrice;
-    } else {
-      return alert.currentPrice <= alert.targetPrice;
+    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+      setFormError('Enter a target price greater than zero.');
+      return;
     }
-  };
 
-  const triggeredCount = alerts.filter(getAlertStatus).length;
+    setAlerts((current) => [
+      {
+        id: `${draft.cryptoId}-${Date.now()}`,
+        cryptoId: draft.cryptoId,
+        direction: draft.direction,
+        targetPrice,
+        createdAt: new Date().toISOString(),
+      },
+      ...current,
+    ]);
+    setDraft(EMPTY_DRAFT);
+    setFormError(null);
+    setShowForm(false);
+  }
+
+  function deleteAlert(id: string) {
+    setAlerts((current) => current.filter((alert) => alert.id !== id));
+  }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Intelligent Market Alerts</h2>
-          <p className="text-sm text-slate-400 mt-1">{triggeredCount} alert(s) triggered</p>
+          <h2 className="text-2xl font-bold text-white">Market alerts</h2>
+          <p className="text-sm text-slate-400" aria-live="polite">
+            {loading
+              ? 'Checking live prices…'
+              : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered`}
+          </p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition"
-        >
-          <FiBell /> New Alert
-        </button>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
+          <FiBell aria-hidden="true" /> New alert
+        </Button>
       </div>
 
-      {/* Add Alert Form */}
       {showForm && (
-        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-white">Create New Alert</h3>
-            <button
-              onClick={() => setShowForm(false)}
-              className="p-1 hover:bg-slate-700 rounded transition"
-            >
-              <FiX className="text-slate-400" />
-            </button>
-          </div>
-
-          <form onSubmit={handleAddAlert} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Cryptocurrency</label>
-              <input
-                type="text"
-                value={formData.crypto}
-                onChange={(e) => setFormData({ ...formData, crypto: e.target.value })}
-                placeholder="Bitcoin, Ethereum, etc."
-                className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-orange-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Alert Type</label>
-                <select
-                  value={formData.alertType}
-                  onChange={(e) =>
-                    setFormData({ ...formData, alertType: e.target.value as 'above' | 'below' })
-                  }
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:border-orange-500"
+        <Card>
+          <CardHeader
+            title="Create alert"
+            action={
+              <IconButton label="Close form" onClick={() => setShowForm(false)}>
+                <FiX aria-hidden="true" />
+              </IconButton>
+            }
+          />
+          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field label="Coin" htmlFor="alert-coin">
+                <Select
+                  id="alert-coin"
+                  value={draft.cryptoId}
+                  onChange={(event) => setDraft({ ...draft, cryptoId: event.target.value })}
                 >
-                  <option value="above">Price Above</option>
-                  <option value="below">Price Below</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Target Price</label>
-                <input
+                  {COINS.map((coin) => (
+                    <option key={coin.id} value={coin.id}>
+                      {coin.name} ({coin.symbol})
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label="Condition" htmlFor="alert-direction">
+                <Select
+                  id="alert-direction"
+                  value={draft.direction}
+                  onChange={(event) =>
+                    setDraft({ ...draft, direction: event.target.value as 'above' | 'below' })
+                  }
+                >
+                  <option value="above">Price rises above</option>
+                  <option value="below">Price falls below</option>
+                </Select>
+              </Field>
+
+              <Field label="Target price (USD)" htmlFor="alert-target">
+                <Input
+                  id="alert-target"
                   type="number"
-                  value={formData.targetPrice}
-                  onChange={(e) => setFormData({ ...formData, targetPrice: e.target.value })}
-                  placeholder="0.00"
-                  className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-400 focus:outline-none focus:border-orange-500"
+                  min="0"
+                  step="any"
+                  inputMode="decimal"
+                  placeholder="50000"
+                  value={draft.targetPrice}
+                  onChange={(event) => setDraft({ ...draft, targetPrice: event.target.value })}
                 />
-              </div>
+              </Field>
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-2 rounded-lg transition"
-            >
-              Create Alert
-            </button>
+            {formError && (
+              <p role="alert" className="text-sm text-rose-300">
+                {formError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowForm(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Create alert</Button>
+            </div>
           </form>
-        </div>
+        </Card>
       )}
 
-      {/* Alerts List */}
-      <div className="space-y-3">
-        {alerts.length === 0 ? (
-          <div className="bg-slate-800 rounded-lg p-8 border border-slate-700 text-center">
-            <FiBell className="mx-auto text-slate-500 mb-3" size={32} />
-            <p className="text-slate-400">No alerts set up yet</p>
-          </div>
-        ) : (
-          alerts.map((alert) => {
-            const isTriggered = getAlertStatus(alert);
-            return (
-              <div
-                key={alert.id}
-                className={`rounded-lg p-4 border ${
-                  isTriggered
-                    ? 'bg-orange-500/10 border-orange-500'
-                    : 'bg-slate-800 border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-white text-lg">
-                        {alert.cryptoName}
-                        <span className="text-slate-400 ml-2">({alert.cryptoSymbol})</span>
-                      </h3>
-                      {isTriggered && (
-                        <span className="px-2 py-1 bg-orange-500 text-white text-xs font-semibold rounded">
-                          TRIGGERED
-                        </span>
-                      )}
-                    </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatTile label="Active alerts" value={alerts.length} />
+        <StatTile
+          label="Triggered"
+          value={triggeredCount}
+          tone={triggeredCount > 0 ? 'positive' : 'neutral'}
+        />
+        <StatTile label="Coins monitored" value={ids.length} />
+      </div>
 
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-slate-400">Alert Type</p>
-                        <p className="text-white font-semibold">
-                          Price {alert.alertType === 'above' ? 'Above' : 'Below'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400">Target Price</p>
-                        <p className="text-white font-semibold">{formatPrice(alert.targetPrice)}</p>
-                      </div>
-                      <div>
-                        <p className="text-slate-400">Current Price</p>
-                        <p className="text-white font-semibold">{formatPrice(alert.currentPrice)}</p>
-                      </div>
-                    </div>
+      {evaluated.length === 0 ? (
+        <EmptyState
+          icon={<FiBell size={24} />}
+          title="No alerts yet"
+          description="Create an alert to be notified when a coin crosses your target price."
+          action={<Button onClick={() => setShowForm(true)}>Create alert</Button>}
+        />
+      ) : (
+        <ul className="space-y-3">
+          {evaluated.map((alert) => (
+            <li
+              key={alert.id}
+              className={`rounded-xl border p-4 ${
+                alert.triggered
+                  ? 'border-orange-500/60 bg-orange-500/10'
+                  : 'border-slate-700/70 bg-slate-800/60'
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <h3 className="font-semibold text-white">
+                      {coinLabel(alert.cryptoId)}
+                      <span className="ml-2 text-slate-400">({coinSymbol(alert.cryptoId)})</span>
+                    </h3>
+                    {alert.triggered && (
+                      <span className="rounded bg-orange-600 px-2 py-0.5 text-xs font-semibold text-white">
+                        TRIGGERED
+                      </span>
+                    )}
                   </div>
 
-                  <button
-                    onClick={() => deleteAlert(alert.id)}
-                    className="ml-4 p-2 hover:bg-red-500/20 rounded text-red-400 transition"
-                  >
-                    <FiTrash2 size={18} />
-                  </button>
+                  <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
+                    <div>
+                      <dt className="text-slate-400">Condition</dt>
+                      <dd className="font-semibold text-white">
+                        Price {alert.direction === 'above' ? 'above' : 'below'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-400">Target</dt>
+                      <dd className="font-semibold tabular-nums text-white">
+                        {formatPrice(alert.targetPrice)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-slate-400">Current</dt>
+                      <dd className="font-semibold tabular-nums text-white">
+                        {alert.currentPrice === undefined ? (
+                          <span className="text-slate-500">—</span>
+                        ) : (
+                          formatPrice(alert.currentPrice)
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Alert Settings */}
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <h3 className="text-lg font-semibold text-white mb-4">Notification Settings</h3>
-        <div className="space-y-3">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
+                <IconButton
+                  label={`Delete ${coinLabel(alert.cryptoId)} alert`}
+                  variant="danger"
+                  onClick={() => deleteAlert(alert.id)}
+                >
+                  <FiTrash2 size={16} aria-hidden="true" />
+                </IconButton>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Card>
+        <CardHeader title="Notification settings" subtitle="Delivery channels for triggered alerts" />
+        <div className="space-y-3 p-5">
+          <label className="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
             <span className="text-slate-300">Email notifications</span>
           </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" defaultChecked className="w-4 h-4 rounded" />
+          <label className="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
             <span className="text-slate-300">Browser push notifications</span>
           </label>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded" />
+          <label className="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" className="h-4 w-4 accent-orange-600" />
             <span className="text-slate-300">SMS notifications</span>
           </label>
+          <p className="text-xs text-slate-500">
+            Delivery is a placeholder — connect Supabase or an email provider to enable it.
+          </p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

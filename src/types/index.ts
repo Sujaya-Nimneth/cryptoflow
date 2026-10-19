@@ -58,6 +58,26 @@ export interface GlobalMarketData {
   updated_at: number;
 }
 
+export interface PortfolioHolding {
+  id: string;
+  cryptoId: string;
+  quantity: number;
+  purchasePrice: number;
+}
+
+export interface WatchlistEntry {
+  id: string;
+  cryptoId: string;
+}
+
+export interface PriceAlert {
+  id: string;
+  cryptoId: string;
+  direction: 'above' | 'below';
+  targetPrice: number;
+  createdAt: string;
+}
+
 export interface PortfolioPerformance {
   total_investment: number;
   current_value: number;

@@ -1,89 +1,63 @@
-'use client';
-
-import { Cryptocurrency } from '@/types';
-import { FiTrendingUp, FiTrendingDown } from 'react-icons/fi';
+import { FiTrendingDown, FiTrendingUp } from 'react-icons/fi';
+import type { Cryptocurrency } from '@/types';
+import { formatCompactCurrency, formatPercent, formatPrice, trendBgClass, trendClass } from '@/lib/format';
+import { CoinAvatar } from './ui/CoinAvatar';
+import { cx } from './ui/Card';
 
 interface PriceCardProps {
   crypto: Cryptocurrency;
 }
 
 export default function PriceCard({ crypto }: PriceCardProps) {
-  const isPriceUp = crypto.price_change_percentage_24h >= 0;
-  const priceChangeColor = isPriceUp ? 'text-green-400' : 'text-red-400';
-  const bgColor = isPriceUp ? 'bg-green-500/10' : 'bg-red-500/10';
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(price);
-  };
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat('en-US', {
-      notation: 'compact',
-      compactDisplay: 'short',
-    }).format(num);
-  };
+  const change = crypto.price_change_percentage_24h;
+  const isUp = change >= 0;
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-orange-500 transition">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          {crypto.image && (
-            <img
-              src={crypto.image}
-              alt={crypto.name}
-              className="w-8 h-8 rounded-full"
-            />
-          )}
-          <div>
-            <h3 className="font-semibold text-white">{crypto.name}</h3>
-            <p className="text-xs text-slate-400">{crypto.symbol.toUpperCase()}</p>
+    <article className="group rounded-xl border border-slate-700/70 bg-slate-800/60 p-4 transition hover:border-orange-500/70 hover:bg-slate-800">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <CoinAvatar src={crypto.image} alt={crypto.name} size={32} />
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold text-white">{crypto.name}</h3>
+            <p className="text-xs uppercase text-slate-400">{crypto.symbol}</p>
           </div>
         </div>
-        <span className="text-xs bg-slate-700 px-2 py-1 rounded text-slate-300">
+        <span className="shrink-0 rounded bg-slate-700/70 px-2 py-1 text-xs text-slate-300">
           #{crypto.market_cap_rank}
         </span>
       </div>
 
-      <div className="space-y-2">
-        <div>
-          <p className="text-sm text-slate-400">Current Price</p>
-          <p className="text-2xl font-bold text-white">{formatPrice(crypto.current_price)}</p>
-        </div>
+      <p className="text-xs text-slate-400">Current price</p>
+      <p className="text-2xl font-bold tabular-nums text-white">{formatPrice(crypto.current_price)}</p>
 
-        <div className={`flex items-center gap-2 p-2 rounded ${bgColor}`}>
-          {isPriceUp ? (
-            <FiTrendingUp className="text-green-400" />
-          ) : (
-            <FiTrendingDown className="text-red-400" />
-          )}
-          <p className={`${priceChangeColor} font-semibold`}>
-            {isPriceUp ? '+' : ''}
-            {crypto.price_change_percentage_24h.toFixed(2)}%
-          </p>
-          <p className="text-xs text-slate-400">24h</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div>
-            <p className="text-slate-400">H24</p>
-            <p className="text-white font-semibold">{formatPrice(crypto.high_24h)}</p>
-          </div>
-          <div>
-            <p className="text-slate-400">L24</p>
-            <p className="text-white font-semibold">{formatPrice(crypto.low_24h)}</p>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-slate-400 text-xs">Market Cap</p>
-          <p className="text-white font-semibold">{formatNumber(crypto.market_cap)}</p>
-        </div>
+      <div className={cx('mt-3 flex items-center gap-2 rounded-lg px-2 py-1.5', trendBgClass(change))}>
+        {isUp ? (
+          <FiTrendingUp className="text-emerald-400" aria-hidden="true" />
+        ) : (
+          <FiTrendingDown className="text-rose-400" aria-hidden="true" />
+        )}
+        <span className={cx('font-semibold tabular-nums', trendClass(change))}>
+          {formatPercent(change)}
+        </span>
+        <span className="text-xs text-slate-400">24h</span>
       </div>
-    </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <dt className="text-slate-400">24h high</dt>
+          <dd className="font-semibold tabular-nums text-white">{formatPrice(crypto.high_24h)}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">24h low</dt>
+          <dd className="font-semibold tabular-nums text-white">{formatPrice(crypto.low_24h)}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-slate-400">Market cap</dt>
+          <dd className="font-semibold tabular-nums text-white">
+            {formatCompactCurrency(crypto.market_cap)}
+          </dd>
+        </div>
+      </dl>
+    </article>
   );
 }

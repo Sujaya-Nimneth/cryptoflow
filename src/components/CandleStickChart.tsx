@@ -161,6 +161,8 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
       },
       y: {
         position: 'right',
+        beginAtZero: false,
+        grace: '5%',
         ticks: {
           color: '#94a3b8',
           callback: (value) => formatPrice(Number(value)),

@@ -2,7 +2,7 @@ import type { ChartData, Cryptocurrency, GlobalMarketData } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://api.coingecko.com/api/v3';
 
-export const DEFAULT_COIN_IDS = ['bitcoin', 'ethereum', 'cardano', 'solana', 'xrp'] as const;
+export const DEFAULT_COIN_IDS = ['bitcoin', 'ethereum', 'cardano', 'solana', 'ripple'] as const;
 
 /** CoinGecko requires at least one id, and per_page must cover every requested coin. */
 function buildMarketsParams(ids: string[], vsCurrency: string) {
