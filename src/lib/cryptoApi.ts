@@ -1,6 +1,7 @@
 import type { ChartData, Cryptocurrency, GlobalMarketData } from '@/types';
 
-const API_URL = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://api.coingecko.com/api/v3';
+/** All browser traffic goes through our own proxy so responses can be cached and CORS-safe. */
+const API_URL = '/api/crypto';
 
 export const DEFAULT_COIN_IDS = ['bitcoin', 'ethereum', 'cardano', 'solana', 'ripple'] as const;
 
@@ -25,8 +26,14 @@ async function request<T>(path: string, params: URLSearchParams, signal?: AbortS
 
   if (!response.ok) {
     const retryAfter = response.headers.get('retry-after');
-    const suffix = retryAfter ? ` Retry after ${retryAfter}s.` : '';
-    throw new Error(`CoinGecko request failed (${response.status}).${suffix}`);
+    if (response.status === 429) {
+      throw new Error(
+        retryAfter
+          ? `Market data is rate limited. Try again in ${retryAfter}s.`
+          : 'Market data is rate limited. Try again shortly.'
+      );
+    }
+    throw new Error(`Market data request failed (${response.status}).`);
   }
 
   return (await response.json()) as T;

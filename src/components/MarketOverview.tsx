@@ -43,7 +43,6 @@ export default function MarketOverview() {
   const marketCap = data?.total_market_cap?.usd;
   const volume = data?.total_volume?.usd;
   const capChange = data?.market_cap_change_percentage_24h_usd;
-  const volumeChange = data?.volume_change_percentage_24h_usd;
   const dominance = data?.market_cap_percentage?.btc;
 
   return (
@@ -62,11 +61,6 @@ export default function MarketOverview() {
         <StatTile
           label="24h volume"
           value={volume === undefined ? <Skeleton /> : formatCompactCurrency(volume)}
-          hint={
-            volumeChange === undefined ? undefined : (
-              <span className={trendClass(volumeChange)}>{formatPercent(volumeChange)} 24h</span>
-            )
-          }
         />
         <StatTile
           label="Bitcoin dominance"

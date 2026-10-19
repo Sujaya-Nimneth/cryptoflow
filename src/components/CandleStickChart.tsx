@@ -14,6 +14,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { getCryptocurrencyChart } from '@/lib/cryptoApi';
 import { formatPrice } from '@/lib/format';
+import { Button } from './ui/Button';
 import type { ChartData } from '@/types';
 
 ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
@@ -41,6 +42,7 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
   const [selectedDays, setSelectedDays] = useState<Timeframe>(days);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -62,7 +64,7 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
 
     load();
     return () => controller.abort();
-  }, [cryptoId, selectedDays]);
+  }, [cryptoId, selectedDays, reloadKey]);
 
   const formatLabel = useCallback(
     (timestamp: number) => {
@@ -209,9 +211,14 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
         )}
 
         {!loading && error && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-rose-300">{error}</p>
-            <p className="text-xs text-slate-500">CoinGecko may be rate limiting. Try again in a minute.</p>
+            <p className="text-xs text-slate-500">
+              CoinGecko&apos;s free tier allows a limited number of requests per minute.
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+              Retry
+            </Button>
           </div>
         )}
 
