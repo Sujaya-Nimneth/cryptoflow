@@ -6,7 +6,7 @@ A professional-grade, real-time cryptocurrency analytics dashboard built with Ne
 
 - **Live Price Tracking**: Real-time cryptocurrency price updates with 24-hour change indicators
 - **Portfolio Management**: Track your crypto investments with detailed performance analytics
-- **Interactive Charts**: Advanced candlestick and line charts with multiple timeframe options
+- **Interactive Charts**: OHLC candlestick charts with five timeframes and a coin picker
 - **Market Alerts**: Set intelligent price alerts for cryptocurrencies with email and push notifications
 - **Watchlist**: Create custom watchlists to monitor your favorite cryptocurrencies
 - **Market Overview**: View global market cap, trading volume, and Bitcoin dominance metrics
@@ -223,6 +223,10 @@ npm test           # Vitest unit tests
 
 CI runs typecheck, lint, tests and build on every push and pull request
 (see `.github/workflows/ci.yml`).
+
+`npm audit --omit=dev` reports zero vulnerabilities. The remaining advisories are
+confined to ESLint's build-time tooling (`braces` via `fast-glob` inside
+`eslint-config-next`) and are not shipped to the browser.
 
 ## 🔒 Security Notes
 
