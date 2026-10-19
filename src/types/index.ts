@@ -49,6 +49,15 @@ export interface ChartData {
   volume: number;
 }
 
+export interface GlobalMarketData {
+  total_market_cap: Record<string, number>;
+  total_volume: Record<string, number>;
+  market_cap_percentage: Record<string, number>;
+  market_cap_change_percentage_24h_usd: number;
+  volume_change_percentage_24h_usd?: number;
+  updated_at: number;
+}
+
 export interface PortfolioPerformance {
   total_investment: number;
   current_value: number;

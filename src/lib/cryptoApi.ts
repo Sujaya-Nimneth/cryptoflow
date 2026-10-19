@@ -1,98 +1,88 @@
-import axios from 'axios';
-import { Cryptocurrency, ChartData } from '@/types';
+import type { ChartData, Cryptocurrency, GlobalMarketData } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://api.coingecko.com/api/v3';
 
-const apiClient = axios.create({
-  baseURL: API_URL,
-});
+export const DEFAULT_COIN_IDS = ['bitcoin', 'ethereum', 'cardano', 'solana', 'xrp'] as const;
 
-export async function getCryptocurrencies(
-  ids: string[] = ['bitcoin', 'ethereum', 'cardano', 'solana', 'xrp'],
-  vsCurrency: string = 'usd'
-): Promise<Cryptocurrency[]> {
-  try {
-    const response = await apiClient.get<Cryptocurrency[]>('/coins/markets', {
-      params: {
-        vs_currency: vsCurrency,
-        ids: ids.join(','),
-        order: 'market_cap_desc',
-        per_page: 250,
-        sparkline: true,
-        price_change_percentage: '24h',
-      },
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Failed to fetch cryptocurrencies:', error);
-    throw error;
-  }
+/** CoinGecko requires at least one id, and per_page must cover every requested coin. */
+function buildMarketsParams(ids: string[], vsCurrency: string) {
+  return new URLSearchParams({
+    vs_currency: vsCurrency,
+    ids: ids.join(','),
+    order: 'market_cap_desc',
+    per_page: String(Math.max(ids.length, 1)),
+    page: '1',
+    sparkline: 'false',
+    price_change_percentage: '24h',
+  });
 }
 
-export async function getCryptocurrencyDetails(id: string, vsCurrency: string = 'usd') {
-  try {
-    const response = await apiClient.get(`/coins/${id}`, {
-      params: {
-        vs_currency: vsCurrency,
-        market_data: true,
-        sparkline: true,
-      },
-    });
-    return response.data;
-  } catch (error) {
-    console.error(`Failed to fetch cryptocurrency details for ${id}:`, error);
-    throw error;
+async function request<T>(path: string, params: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${API_URL}${path}?${params}`, {
+    signal,
+    headers: { accept: 'application/json' },
+  });
+
+  if (!response.ok) {
+    const retryAfter = response.headers.get('retry-after');
+    const suffix = retryAfter ? ` Retry after ${retryAfter}s.` : '';
+    throw new Error(`CoinGecko request failed (${response.status}).${suffix}`);
   }
+
+  return (await response.json()) as T;
+}
+
+export async function getCryptocurrencies(
+  ids: readonly string[] = DEFAULT_COIN_IDS,
+  vsCurrency = 'usd',
+  signal?: AbortSignal
+): Promise<Cryptocurrency[]> {
+  const data = await request<Cryptocurrency[]>(
+    '/coins/markets',
+    buildMarketsParams([...ids], vsCurrency),
+    signal
+  );
+
+  // CoinGecko omits or nulls these fields for brand-new listings.
+  return data.map((coin) => ({
+    ...coin,
+    price_change_percentage_24h: coin.price_change_percentage_24h ?? 0,
+    high_24h: coin.high_24h ?? coin.current_price,
+    low_24h: coin.low_24h ?? coin.current_price,
+  }));
+}
+
+export async function getGlobalMarketData(signal?: AbortSignal): Promise<GlobalMarketData> {
+  const data = await request<{ data: GlobalMarketData }>('/global', new URLSearchParams(), signal);
+  return data.data;
 }
 
 export async function getCryptocurrencyChart(
   id: string,
   days: string | number = '1',
-  vsCurrency: string = 'usd'
+  vsCurrency = 'usd',
+  signal?: AbortSignal
 ): Promise<ChartData[]> {
-  try {
-    const response = await apiClient.get(`/coins/${id}/ohlc`, {
-      params: {
-        vs_currency: vsCurrency,
-        days: days,
-      },
-    });
-    
-    // Transform API response to ChartData format
-    return response.data.map((candle: number[]) => ({
-      timestamp: candle[0],
-      open: candle[1],
-      high: candle[2],
-      low: candle[3],
-      close: candle[4],
-      volume: 0, // CoinGecko doesn't provide volume in this endpoint
-    }));
-  } catch (error) {
-    console.error(`Failed to fetch chart data for ${id}:`, error);
-    throw error;
-  }
+  const params = new URLSearchParams({ vs_currency: vsCurrency, days: String(days) });
+  const candles = await request<number[][]>(`/coins/${id}/ohlc`, params, signal);
+
+  return candles.map(([timestamp, open, high, low, close]) => ({
+    timestamp,
+    open,
+    high,
+    low,
+    close,
+    volume: 0, // The /ohlc endpoint does not return volume.
+  }));
 }
 
-export async function searchCryptocurrencies(query: string) {
-  try {
-    const response = await apiClient.get('/search', {
-      params: {
-        query,
-      },
-    });
-    return response.data.coins;
-  } catch (error) {
-    console.error('Failed to search cryptocurrencies:', error);
-    throw error;
-  }
+export async function searchCryptocurrencies(query: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ query });
+  const data = await request<{ coins: unknown[] }>('/search', params, signal);
+  return data.coins;
 }
 
-export async function getTrendingCryptocurrencies() {
-  try {
-    const response = await apiClient.get('/search/trending');
-    return response.data.coins;
-  } catch (error) {
-    console.error('Failed to fetch trending cryptocurrencies:', error);
-    throw error;
-  }
+export async function getTrendingCryptocurrencies(signal?: AbortSignal) {
+  const data = await request<{ coins: unknown[] }>('/search/trending', new URLSearchParams(), signal);
+  return data.coins;
 }
