@@ -72,12 +72,13 @@ export default function DashboardTabs() {
                 id={`tab-${tab.id}`}
                 aria-selected={selected}
                 aria-controls={`panel-${tab.id}`}
+                aria-label={tab.label}
                 onClick={() => selectTab(tab.id)}
                 onMouseEnter={() => {
                   if (tab.id !== 'dashboard') void PRELOADERS[tab.id]();
                 }}
                 className={cx(
-                  'inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition',
+                  'inline-flex shrink-0 items-center justify-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition sm:px-4',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
                   selected
                     ? 'border-orange-500 text-orange-300'
@@ -85,7 +86,7 @@ export default function DashboardTabs() {
                 )}
               >
                 {tab.icon}
-                <span>{tab.label}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
               </button>
             );
           })}

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { FiBell, FiTrash2, FiX } from 'react-icons/fi';
-import { useMarketPrices } from '@/hooks/useMarketPrices';
+import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPrice } from '@/lib/format';
 import type { PriceAlert } from '@/types';
@@ -27,12 +27,12 @@ export default function MarketAlerts() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
-  const { prices, loading } = useMarketPrices(ids);
+  const { coins, loading } = useMarketCoins(ids);
 
   const evaluated = useMemo(
     () =>
       alerts.map((alert) => {
-        const currentPrice = prices.get(alert.cryptoId);
+        const currentPrice = coins.get(alert.cryptoId)?.current_price;
         const triggered =
           currentPrice === undefined
             ? false
@@ -41,7 +41,7 @@ export default function MarketAlerts() {
               : currentPrice <= alert.targetPrice;
         return { ...alert, currentPrice, triggered };
       }),
-    [alerts, prices]
+    [alerts, coins]
   );
 
   const triggeredCount = evaluated.filter((alert) => alert.triggered).length;

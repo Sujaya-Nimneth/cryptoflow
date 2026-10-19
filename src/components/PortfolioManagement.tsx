@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { FiPlus, FiTrash2 } from 'react-icons/fi';
-import { useMarketPrices } from '@/hooks/useMarketPrices';
+import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPercent, formatPrice, formatQuantity, formatSignedPrice } from '@/lib/format';
 import type { PortfolioHolding } from '@/types';
@@ -32,19 +32,19 @@ export default function PortfolioManagement() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
-  const { prices, loading } = useMarketPrices(ids);
+  const { coins, loading } = useMarketCoins(ids);
 
   const rows = useMemo(
     () =>
       holdings.map((holding) => {
-        const currentPrice = prices.get(holding.cryptoId) ?? holding.purchasePrice;
+        const currentPrice = coins.get(holding.cryptoId)?.current_price ?? holding.purchasePrice;
         const invested = holding.quantity * holding.purchasePrice;
         const value = holding.quantity * currentPrice;
         const gainLoss = value - invested;
         const gainLossPercent = invested > 0 ? (gainLoss / invested) * 100 : 0;
         return { ...holding, currentPrice, invested, value, gainLoss, gainLossPercent };
       }),
-    [holdings, prices]
+    [holdings, coins]
   );
 
   const stats = useMemo(() => {
@@ -204,17 +204,23 @@ export default function PortfolioManagement() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[28rem] text-sm">
               <caption className="sr-only">Portfolio holdings and performance</caption>
               <thead>
                 <tr className="border-b border-slate-700 bg-slate-900/40 text-left">
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Asset</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Quantity</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Purchase</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Current</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Value</th>
-                  <th scope="col" className="px-5 py-3 font-semibold text-slate-200">Gain / loss</th>
-                  <th scope="col" className="px-5 py-3 text-center font-semibold text-slate-200">
+                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Asset</th>
+                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Quantity</th>
+                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                    Purchase
+                  </th>
+                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                    Current
+                  </th>
+                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 sm:table-cell">
+                    Value
+                  </th>
+                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Gain / loss</th>
+                  <th scope="col" className="px-3 py-3 sm:px-5 text-center font-semibold text-slate-200">
                     Actions
                   </th>
                 </tr>
@@ -224,27 +230,29 @@ export default function PortfolioManagement() {
                   const isGain = row.gainLoss >= 0;
                   return (
                     <tr key={row.id} className="border-b border-slate-700/60 last:border-0">
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-3 sm:px-5">
                         <p className="font-semibold text-white">{coinLabel(row.cryptoId)}</p>
                         <p className="text-xs text-slate-400">{coinSymbol(row.cryptoId)}</p>
                       </td>
-                      <td className="px-5 py-3 tabular-nums text-slate-200">
+                      <td className="px-3 py-3 sm:px-5 tabular-nums text-slate-200">
                         {formatQuantity(row.quantity)}
                       </td>
-                      <td className="px-5 py-3 tabular-nums text-slate-200">
+                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
                         {formatPrice(row.purchasePrice)}
                       </td>
-                      <td className="px-5 py-3 tabular-nums text-slate-200">
+                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
                         {formatPrice(row.currentPrice)}
                       </td>
-                      <td className="px-5 py-3 tabular-nums text-white">{formatPrice(row.value)}</td>
+                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-white sm:table-cell">
+                        {formatPrice(row.value)}
+                      </td>
                       <td
-                        className={`px-5 py-3 tabular-nums ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}
+                        className={`px-3 py-3 sm:px-5 tabular-nums ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}
                       >
                         <p className="font-semibold">{formatSignedPrice(row.gainLoss)}</p>
                         <p className="text-xs">{formatPercent(row.gainLossPercent)}</p>
                       </td>
-                      <td className="px-5 py-3 text-center">
+                      <td className="px-3 py-3 sm:px-5 text-center">
                         <IconButton
                           label={`Remove ${coinLabel(row.cryptoId)}`}
                           variant="danger"

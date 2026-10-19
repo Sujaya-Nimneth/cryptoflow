@@ -2,19 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import { getCryptocurrencies } from '@/lib/cryptoApi';
+import type { Cryptocurrency } from '@/types';
 
-interface MarketPrices {
-  prices: Map<string, number>;
+interface MarketCoins {
+  coins: Map<string, Cryptocurrency>;
   loading: boolean;
   error: string | null;
 }
 
 /**
- * Resolves current USD prices for the given coin ids so the portfolio and alert
- * views stay in sync with the market. Prices are keyed by CoinGecko coin id.
+ * Resolves current market data for the given coin ids so the portfolio, watchlist
+ * and alert views stay in sync with live prices. Results are keyed by CoinGecko id.
  */
-export function useMarketPrices(ids: readonly string[]): MarketPrices {
-  const [prices, setPrices] = useState<Map<string, number>>(new Map());
+export function useMarketCoins(ids: readonly string[]): MarketCoins {
+  const [coins, setCoins] = useState<Map<string, Cryptocurrency>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +27,7 @@ export function useMarketPrices(ids: readonly string[]): MarketPrices {
 
     const timer = window.setTimeout(async () => {
       if (key === '') {
-        setPrices(new Map());
+        setCoins(new Map());
         setLoading(false);
         return;
       }
@@ -34,7 +35,7 @@ export function useMarketPrices(ids: readonly string[]): MarketPrices {
       try {
         const data = await getCryptocurrencies(key.split(','), 'usd', controller.signal);
         if (cancelled) return;
-        setPrices(new Map(data.map((coin) => [coin.id, coin.current_price])));
+        setCoins(new Map(data.map((coin) => [coin.id, coin])));
         setError(null);
       } catch (err) {
         if (cancelled || controller.signal.aborted) return;
@@ -51,5 +52,5 @@ export function useMarketPrices(ids: readonly string[]): MarketPrices {
     };
   }, [key]);
 
-  return { prices, loading, error };
+  return { coins, loading, error };
 }
