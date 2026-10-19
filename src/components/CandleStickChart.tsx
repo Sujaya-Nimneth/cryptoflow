@@ -1,168 +1,226 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  Chart as ChartJS,
+  BarController,
+  BarElement,
   CategoryScale,
+  Chart as ChartJS,
   LinearScale,
-  PointElement,
-  LineElement,
-  Title,
   Tooltip,
-  Legend,
-  ChartEvent,
-  ActiveElement,
+  type ChartOptions,
+  type ScriptableContext,
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2';
 import { getCryptocurrencyChart } from '@/lib/cryptoApi';
-import { ChartData } from '@/types';
+import { formatPrice } from '@/lib/format';
+import type { ChartData } from '@/types';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+
+const TIMEFRAMES = [
+  { value: '1', label: '24H' },
+  { value: '7', label: '7D' },
+  { value: '30', label: '30D' },
+  { value: '90', label: '90D' },
+  { value: '365', label: '1Y' },
+] as const;
+
+type Timeframe = (typeof TIMEFRAMES)[number]['value'];
 
 interface CandleStickChartProps {
   cryptoId: string;
-  days?: string | number;
+  days?: Timeframe;
 }
 
+const UP = '#34d399';
+const DOWN = '#fb7185';
+
 export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickChartProps) {
-  const [chartData, setChartData] = useState<ChartData[]>([]);
+  const [candles, setCandles] = useState<ChartData[]>([]);
+  const [selectedDays, setSelectedDays] = useState<Timeframe>(days);
   const [loading, setLoading] = useState(true);
-  const [selectedDays, setSelectedDays] = useState(days);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchChartData();
+    const controller = new AbortController();
+
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getCryptocurrencyChart(cryptoId, selectedDays, 'usd', controller.signal);
+        setCandles(data);
+        setError(null);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : 'Failed to load chart data');
+        setCandles([]);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => controller.abort();
   }, [cryptoId, selectedDays]);
 
-  const fetchChartData = async () => {
-    try {
-      setLoading(true);
-      const data = await getCryptocurrencyChart(cryptoId, selectedDays);
-      setChartData(data);
-    } catch (error) {
-      console.error('Failed to fetch chart data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const formatLabel = useCallback(
+    (timestamp: number) => {
+      const date = new Date(timestamp);
+      if (selectedDays === '1') {
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      }
+      if (selectedDays === '365') {
+        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+      }
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    },
+    [selectedDays]
+  );
 
-  if (loading || chartData.length === 0) {
-    return (
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-        <div className="h-96 flex items-center justify-center text-slate-400">
-          Loading chart data...
-        </div>
-      </div>
-    );
-  }
+  const labels = candles.map((candle) => formatLabel(candle.timestamp));
+  const closes = candles.map((candle) => candle.close);
 
-  const labels = chartData.map((d) => {
-    const date = new Date(d.timestamp);
-    return `${date.getMonth() + 1}/${date.getDate()}`;
-  });
-
-  const closePrices = chartData.map((d) => d.close);
-  const highPrices = chartData.map((d) => d.high);
-  const lowPrices = chartData.map((d) => d.low);
+  // A candlestick body is drawn as a floating bar from open to close,
+  // with a second dataset spanning low to high for the wick.
+  const bodyData = candles.map((candle) => [candle.open, candle.close] as [number, number]);
+  const wickData = candles.map((candle) => [candle.low, candle.high] as [number, number]);
 
   const data = {
     labels,
     datasets: [
       {
-        label: 'Close Price',
-        data: closePrices,
-        borderColor: '#f97316',
-        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-        tension: 0.1,
-        fill: true,
-        pointRadius: 3,
-        pointBackgroundColor: '#f97316',
-        pointBorderColor: '#000',
+        label: 'Range',
+        data: wickData,
+        backgroundColor: 'transparent',
+        borderColor: (ctx: ScriptableContext<'bar'>) => {
+          const candle = candles[ctx.dataIndex];
+          return candle && candle.close >= candle.open ? UP : DOWN;
+        },
+        borderWidth: 1,
+        barPercentage: 0.12,
+        categoryPercentage: 0.9,
+        order: 2,
       },
       {
-        label: 'High Price',
-        data: highPrices,
-        borderColor: '#22c55e',
-        backgroundColor: 'transparent',
-        tension: 0.1,
-        borderDash: [5, 5],
-        pointRadius: 2,
-        pointBackgroundColor: '#22c55e',
-        pointBorderColor: '#000',
-      },
-      {
-        label: 'Low Price',
-        data: lowPrices,
-        borderColor: '#ef4444',
-        backgroundColor: 'transparent',
-        tension: 0.1,
-        borderDash: [5, 5],
-        pointRadius: 2,
-        pointBackgroundColor: '#ef4444',
-        pointBorderColor: '#000',
+        label: 'Body',
+        data: bodyData,
+        backgroundColor: (ctx: ScriptableContext<'bar'>) => {
+          const candle = candles[ctx.dataIndex];
+          return candle && candle.close >= candle.open ? UP : DOWN;
+        },
+        borderColor: 'transparent',
+        borderWidth: 0,
+        barPercentage: 0.7,
+        categoryPercentage: 0.9,
+        order: 1,
       },
     ],
   };
 
-  const options = {
+  const options: ChartOptions<'bar'> = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
+    animation: { duration: 250 },
+    interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: {
-        labels: {
-          color: '#cbd5e1',
-        },
-      },
+      legend: { display: false },
       tooltip: {
-        backgroundColor: '#1e293b',
-        borderColor: '#f97316',
+        backgroundColor: '#0f172a',
+        borderColor: '#334155',
         borderWidth: 1,
-        titleColor: '#fff',
-        bodyColor: '#e2e8f0',
+        titleColor: '#f8fafc',
+        bodyColor: '#cbd5e1',
+        padding: 10,
+        callbacks: {
+          label: (item) => {
+            const candle = candles[item.dataIndex];
+            if (!candle) return '';
+            return [
+              `Open ${formatPrice(candle.open)}`,
+              `High ${formatPrice(candle.high)}`,
+              `Low  ${formatPrice(candle.low)}`,
+              `Close ${formatPrice(candle.close)}`,
+            ];
+          },
+          labelColor: (item) => {
+            const candle = candles[item.dataIndex];
+            return {
+              borderColor: 'transparent',
+              backgroundColor: candle && candle.close >= candle.open ? UP : DOWN,
+            };
+          },
+        },
       },
     },
     scales: {
-      y: {
-        ticks: {
-          color: '#94a3b8',
-        },
-        grid: {
-          color: '#334155',
-        },
-      },
       x: {
+        ticks: { color: '#94a3b8', maxTicksLimit: 8, maxRotation: 0 },
+        grid: { display: false },
+        border: { color: '#334155' },
+      },
+      y: {
+        position: 'right',
         ticks: {
           color: '#94a3b8',
+          callback: (value) => formatPrice(Number(value)),
         },
-        grid: {
-          color: '#334155',
-        },
+        grid: { color: 'rgba(51, 65, 85, 0.6)' },
+        border: { display: false },
       },
     },
   };
 
   return (
-    <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xl font-semibold text-white">Price Chart</h3>
-        <div className="flex gap-2">
-          {['1', '7', '30', '90', '365'].map((day) => (
+    <section className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-white">Price Chart</h3>
+          <p className="text-sm text-slate-400">
+            {candles.length > 0 ? `${candles.length} candles · ${closes.at(-1) ? formatPrice(closes.at(-1)!) : ''}` : 'OHLC data'}
+          </p>
+        </div>
+        <div role="group" aria-label="Chart timeframe" className="flex gap-1 rounded-lg bg-slate-900/60 p-1">
+          {TIMEFRAMES.map((frame) => (
             <button
-              key={day}
-              onClick={() => setSelectedDays(day)}
-              className={`px-3 py-1 rounded text-sm transition ${
-                selectedDays === day
-                  ? 'bg-orange-500 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+              key={frame.value}
+              type="button"
+              onClick={() => setSelectedDays(frame.value)}
+              aria-pressed={selectedDays === frame.value}
+              className={`rounded-md px-3 py-1 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
+                selectedDays === frame.value
+                  ? 'bg-orange-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
               }`}
             >
-              {day === '1' ? '24H' : day === '365' ? '1Y' : `${day}D`}
+              {frame.label}
             </button>
           ))}
         </div>
       </div>
-      <div className="h-96">
-        <Line data={data} options={options as any} />
+
+      <div className="h-80">
+        {loading && (
+          <div className="flex h-full items-center justify-center text-slate-400" role="status">
+            Loading chart data…
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <p className="text-sm text-rose-300">{error}</p>
+            <p className="text-xs text-slate-500">CoinGecko may be rate limiting. Try again in a minute.</p>
+          </div>
+        )}
+
+        {!loading && !error && candles.length === 0 && (
+          <div className="flex h-full items-center justify-center text-slate-400">
+            No chart data available.
+          </div>
+        )}
+
+        {!loading && !error && candles.length > 0 && <Bar data={data} options={options} />}
       </div>
-    </div>
+    </section>
   );
 }
