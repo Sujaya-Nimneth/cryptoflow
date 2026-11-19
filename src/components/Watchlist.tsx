@@ -5,7 +5,7 @@ import { FiStar, FiTrash2 } from 'react-icons/fi';
 import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatCompactCurrency, formatPercent, formatPrice, trendClass } from '@/lib/format';
-import type { Cryptocurrency, WatchlistEntry } from '@/types';
+import type { Cryptocurrency } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { CoinAvatar } from './ui/CoinAvatar';
@@ -13,19 +13,10 @@ import { EmptyState } from './ui/EmptyState';
 import { Field, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
-import { useLocalUserData } from '@/hooks/useLocalUserData';
-import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
-import { localWatchlistSchema } from '@/lib/userDataSchemas';
-
-const EMPTY_WATCHLIST = { version: 1 as const, entries: [] as WatchlistEntry[] };
+import { useWatchlistData } from '@/hooks/useWatchlistData';
 
 export default function Watchlist() {
-  const { value: watchlist, status, setValue: setWatchlist, resetInvalid } = useLocalUserData(
-    LOCAL_USER_DATA_KEYS.watchlist,
-    localWatchlistSchema,
-    EMPTY_WATCHLIST
-  );
-  const entries = watchlist.entries;
+  const { entries, status, pending, error: storageError, addEntry, deleteEntry, resetInvalid } = useWatchlistData();
   const [pendingCoin, setPendingCoin] = useState('');
 
   const ids = useMemo(() => [...new Set(entries.map((entry) => entry.cryptoId))], [entries]);
@@ -41,21 +32,16 @@ export default function Watchlist() {
     [ids, coins]
   );
 
-  function addCoin() {
+  async function addCoin() {
     const cryptoId = pendingCoin || availableCoins[0]?.id;
     if (!cryptoId) return;
-    setWatchlist((current) => ({
-      version: 1,
-      entries: [...current.entries, { id: crypto.randomUUID(), cryptoId }],
-    }));
+    const saved = await addEntry({ id: crypto.randomUUID(), cryptoId });
+    if (!saved) return;
     setPendingCoin('');
   }
 
-  function removeCoin(id: string) {
-    setWatchlist((current) => ({
-      version: 1,
-      entries: current.entries.filter((entry) => entry.id !== id),
-    }));
+  async function removeCoin(id: string) {
+    await deleteEntry(id);
   }
 
   return (
@@ -85,7 +71,7 @@ export default function Watchlist() {
               )}
             </Select>
           </Field>
-          <Button onClick={addCoin} disabled={availableCoins.length === 0 || status !== 'ready'} className="mb-0.5">
+          <Button onClick={addCoin} disabled={availableCoins.length === 0 || status !== 'ready' || pending} className="mb-0.5">
             <FiStar aria-hidden="true" /> Add
           </Button>
         </div>
@@ -93,6 +79,7 @@ export default function Watchlist() {
 
       {status === 'invalid' && <div role="alert"><DataNotice message="Saved watchlist data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid watchlist data</Button></div>}
       {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
+      {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -153,6 +140,7 @@ export default function Watchlist() {
                           <IconButton
                             label={`Remove ${coinLabel(entry.cryptoId)} from watchlist`}
                             variant="danger"
+                            disabled={pending}
                             onClick={() => removeCoin(entry.id)}
                           >
                             <FiTrash2 size={16} aria-hidden="true" />

@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
-import DashboardTabs from '@/components/DashboardTabs';
+import DashboardShell from '@/components/DashboardShell';
 import { LastUpdated } from '@/components/LastUpdated';
+import { UserDataProvider, type StorageMode } from '@/components/UserDataProvider';
+import { resolveSupabaseConfig } from '@/lib/supabase/config';
+import { getVerifiedIdentity } from '@/lib/supabase/server';
 
 const tabSkeleton = (
   <div className="space-y-4" aria-hidden="true">
@@ -13,8 +16,14 @@ const tabSkeleton = (
   </div>
 );
 
-export default function Home() {
+export default async function Home({ searchParams }: PageProps<'/'>) {
+  const params = await searchParams;
+  const identity = await getVerifiedIdentity();
+  const cloudConfigured = resolveSupabaseConfig() !== null;
+  const mode: StorageMode = identity && params.storage !== 'local' ? 'cloud' : 'local';
+
   return (
+    <UserDataProvider mode={mode} cloudConfigured={cloudConfigured} identity={identity}>
     <div className="min-h-screen bg-slate-900">
       <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/85 backdrop-blur">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -27,14 +36,16 @@ export default function Home() {
                 Real-time cryptocurrency analytics dashboard
               </p>
             </div>
-            <LastUpdated />
+            <div className="flex items-center gap-4">
+              <LastUpdated />
+            </div>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
         <Suspense fallback={tabSkeleton}>
-          <DashboardTabs />
+          <DashboardShell />
         </Suspense>
       </main>
 
@@ -70,7 +81,7 @@ export default function Home() {
                     CoinGecko API
                   </a>
                 </li>
-                <li>Supabase (optional persistence)</li>
+                <li>Device-local storage; optional private cloud accounts</li>
               </ul>
             </div>
           </div>
@@ -81,5 +92,6 @@ export default function Home() {
         </div>
       </footer>
     </div>
+    </UserDataProvider>
   );
 }

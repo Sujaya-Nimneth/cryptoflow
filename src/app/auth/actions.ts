@@ -39,8 +39,8 @@ export async function authenticate(
   redirect(next);
 }
 
-export async function signOut() {
+export async function signOut(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   if (supabase) await supabase.auth.signOut({ scope: 'local' });
-  redirect('/');
+  redirect(safeAuthRedirect(String(formData.get('next') ?? '/')));
 }

@@ -6,18 +6,13 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPercent, formatPrice, formatQuantity, formatSignedPrice } from '@/lib/format';
 import { computeAllocation, computeRows, computeStats } from '@/lib/portfolio';
-import type { PortfolioHolding } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
-import { useLocalUserData } from '@/hooks/useLocalUserData';
-import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
-import { localPortfolioSchema } from '@/lib/userDataSchemas';
-
-const EMPTY_PORTFOLIO = { version: 1 as const, holdings: [] as PortfolioHolding[] };
+import { usePortfolioData } from '@/hooks/usePortfolioData';
 
 interface DraftHolding {
   cryptoId: string;
@@ -28,12 +23,7 @@ interface DraftHolding {
 const EMPTY_DRAFT: DraftHolding = { cryptoId: COINS[0].id, quantity: '', purchasePrice: '' };
 
 export default function PortfolioManagement() {
-  const { value: portfolio, status, setValue: setPortfolio, resetInvalid } = useLocalUserData(
-    LOCAL_USER_DATA_KEYS.portfolio,
-    localPortfolioSchema,
-    EMPTY_PORTFOLIO
-  );
-  const holdings = portfolio.holdings;
+  const { holdings, status, pending, error: storageError, addHolding, deleteHolding, resetInvalid } = usePortfolioData();
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
@@ -67,7 +57,7 @@ export default function PortfolioManagement() {
       ? `${stats.staleHoldings} holding${stats.staleHoldings === 1 ? '' : 's'} use stale quotes. The total is not a current valuation.`
       : 'All holdings are valued with recent market quotes.';
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const quantity = Number(draft.quantity);
     const purchasePrice = Number(draft.purchasePrice);
@@ -81,21 +71,15 @@ export default function PortfolioManagement() {
       return;
     }
 
-    const saved = setPortfolio((current) => ({
-      version: 1,
-      holdings: [...current.holdings, { id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice }],
-    }));
+    const saved = await addHolding({ id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setShowForm(false);
   }
 
-  function handleDelete(id: string) {
-    setPortfolio((current) => ({
-      version: 1,
-      holdings: current.holdings.filter((holding) => holding.id !== id),
-    }));
+  async function handleDelete(id: string) {
+    await deleteHolding(id);
   }
 
   return (
@@ -107,13 +91,14 @@ export default function PortfolioManagement() {
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready'}>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
 
       {status === 'invalid' && <div role="alert"><DataNotice message="Saved portfolio data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid portfolio data</Button></div>}
       {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
+      {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
       {!loading && rows.length > 0 && (
         <p role="status" className={`rounded-lg p-3 text-sm ${stats.complete && stats.staleHoldings === 0 ? 'bg-slate-800/60 text-slate-300' : 'border border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
@@ -177,7 +162,7 @@ export default function PortfolioManagement() {
               <Button variant="secondary" onClick={() => setShowForm(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Save asset</Button>
+              <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save asset'}</Button>
             </div>
           </form>
         </Card>
@@ -207,7 +192,7 @@ export default function PortfolioManagement() {
           <EmptyState
             title="No assets yet"
             description="Add your first purchase to start tracking performance."
-            action={<Button onClick={() => setShowForm(true)}>Add asset</Button>}
+            action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Add asset</Button>}
           />
         ) : (
           <div className="overflow-x-auto">
@@ -264,6 +249,7 @@ export default function PortfolioManagement() {
                         <IconButton
                           label={`Remove ${coinLabel(row.cryptoId)}`}
                           variant="danger"
+                          disabled={pending}
                           onClick={() => handleDelete(row.id)}
                         >
                           <FiTrash2 size={16} aria-hidden="true" />
