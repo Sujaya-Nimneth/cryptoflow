@@ -5,6 +5,7 @@ import {
   globalResponseSchema,
   ohlcQuerySchema,
   ohlcSchema,
+  retryAfterSeconds,
   type ChartDays,
 } from './marketSchemas';
 import { coinIdSchema } from './coins';
@@ -21,10 +22,10 @@ async function request(path: string, params: URLSearchParams, signal?: AbortSign
   });
 
   if (!response.ok) {
-    const retryAfter = response.headers.get('retry-after');
+    const retryAfter = retryAfterSeconds(response.headers.get('retry-after'));
     if (response.status === 429) {
       throw new Error(
-        retryAfter
+        retryAfter !== null
           ? `Market data is rate limited. Try again in ${retryAfter}s.`
           : 'Market data is rate limited. Try again shortly.'
       );

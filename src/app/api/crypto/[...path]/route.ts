@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { fetchUpstream, resolveProxyRequest, validateProxyPayload } from '@/lib/marketProxy';
+import { fetchUpstream, readBoundedText, resolveProxyRequest, validateProxyPayload } from '@/lib/marketProxy';
+import { retryAfterSeconds } from '@/lib/marketSchemas';
 
 const UPSTREAM_TIMEOUT_MS = 8_000;
 const MAX_PAYLOAD_BYTES = 512_000;
@@ -19,11 +20,11 @@ export async function GET(request: NextRequest, context: RouteContext<'/api/cryp
   try {
     const upstream = await fetchUpstream(proxyRequest, timeout.signal);
     if (!upstream.ok) {
-      const retryAfter = upstream.headers.get('retry-after');
+      const retryAfter = retryAfterSeconds(upstream.headers.get('retry-after'));
       const status = upstream.status === 429 ? 429 : 502;
       return NextResponse.json(
         { error: upstream.status === 429 ? 'Market data is rate limited' : 'Market data is unavailable' },
-        { status, headers: retryAfter ? { 'retry-after': retryAfter } : undefined }
+        { status, headers: retryAfter !== null ? { 'retry-after': String(retryAfter) } : undefined }
       );
     }
 
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest, context: RouteContext<'/api/cryp
     if (length > MAX_PAYLOAD_BYTES) {
       return NextResponse.json({ error: 'Market response is too large' }, { status: 502 });
     }
-    const body = await upstream.text();
-    if (new TextEncoder().encode(body).byteLength > MAX_PAYLOAD_BYTES) {
+    const body = await readBoundedText(upstream, MAX_PAYLOAD_BYTES);
+    if (body === null) {
       return NextResponse.json({ error: 'Market response is too large' }, { status: 502 });
     }
     const payload = validateProxyPayload(proxyRequest.kind, JSON.parse(body));
