@@ -1,4 +1,4 @@
-import { createContext, useContext, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useContext, type ComponentPropsWithRef, type ReactNode } from 'react';
 import { cx } from './Card';
 
 const FieldControlContext = createContext<{ describedBy?: string; invalid: boolean }>({ invalid: false });
@@ -35,7 +35,7 @@ export function Field({ label, htmlFor, hint, error, children }: FieldProps) {
   );
 }
 
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...rest }: ComponentPropsWithRef<'input'>) {
   const field = useContext(FieldControlContext);
   return (
     <input
@@ -47,7 +47,7 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   );
 }
 
-export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select({ className, children, ...rest }: ComponentPropsWithRef<'select'>) {
   const field = useContext(FieldControlContext);
   return (
     <select
