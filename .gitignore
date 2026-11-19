@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/.taste-skill/
 
 # next.js
 /.next/
@@ -19,6 +22,7 @@
 
 # production
 /build
+/supabase/.temp/
 
 # misc
 .DS_Store
