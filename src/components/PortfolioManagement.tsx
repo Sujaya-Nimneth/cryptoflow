@@ -12,6 +12,7 @@ import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
+import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 
 const SEED_HOLDINGS: PortfolioHolding[] = [
   { id: 'seed-btc', cryptoId: 'bitcoin', quantity: 0.5, purchasePrice: 40000 },
@@ -33,7 +34,7 @@ export default function PortfolioManagement() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
-  const { coins, loading } = useMarketCoins(ids);
+  const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
 
   const prices = useMemo(
     () =>
@@ -90,13 +91,15 @@ export default function PortfolioManagement() {
         <div>
           <h2 className="text-2xl font-bold text-white">Portfolio management</h2>
           <p className="text-sm text-slate-400">
-            {loading ? 'Syncing live prices…' : 'Valued at the latest market prices'}
+            {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
         <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
+
+      {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       {showForm && (
         <Card>

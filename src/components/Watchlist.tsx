@@ -12,6 +12,7 @@ import { CoinAvatar } from './ui/CoinAvatar';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
+import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 
 const SEED_WATCHLIST: WatchlistEntry[] = [
   { id: 'w-btc', cryptoId: 'bitcoin' },
@@ -24,7 +25,7 @@ export default function Watchlist() {
   const [pendingCoin, setPendingCoin] = useState('');
 
   const ids = useMemo(() => [...new Set(entries.map((entry) => entry.cryptoId))], [entries]);
-  const { coins, loading, error } = useMarketCoins(ids);
+  const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
 
   const availableCoins = useMemo(() => {
     const tracked = new Set(entries.map((entry) => entry.cryptoId));
@@ -80,17 +81,13 @@ export default function Watchlist() {
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-lg border border-rose-500/50 bg-rose-500/10 p-3 text-sm text-rose-200">
-          {error}
-        </p>
-      )}
+      {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
             title="My watchlist"
-            subtitle={loading ? 'Syncing live prices…' : `${entries.length} assets tracked`}
+            subtitle={loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           />
           {entries.length === 0 ? (
             <div className="p-5">

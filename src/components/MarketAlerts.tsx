@@ -12,6 +12,7 @@ import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
+import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 
 interface DraftAlert {
   cryptoId: string;
@@ -28,7 +29,7 @@ export default function MarketAlerts() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
-  const { coins, loading } = useMarketCoins(ids);
+  const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
 
   const evaluated = useMemo(
     () =>
@@ -81,13 +82,16 @@ export default function MarketAlerts() {
           <p className="text-sm text-slate-400" aria-live="polite">
             {loading
               ? 'Checking live prices…'
-              : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered`}
+              : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered · Checks every 30 seconds while open`}
           </p>
+          {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
         </div>
         <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
+
+      {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       {showForm && (
         <Card>
