@@ -64,7 +64,7 @@ test.describe('authenticated cloud storage', () => {
     if (mobile) await signOutButton.scrollIntoViewIfNeeded();
     await signOutButton.click();
     await expect(page.getByText('This device', { exact: true })).toBeVisible();
-    await expect(page.getByRole('cell', { name: '2', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: /^2(?: |$)/ })).toBeVisible();
     await expect(page.getByRole('cell', { name: '0.75' })).toHaveCount(0);
   });
 });

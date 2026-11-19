@@ -12,7 +12,7 @@ interface CardProps {
 
 export function Card({ children, className, as: Tag = 'div' }: CardProps) {
   return (
-    <Tag className={cx('rounded-xl border border-slate-700/70 bg-slate-800/60 shadow-sm', className)}>
+    <Tag className={cx('rounded-lg border border-slate-700/70 bg-slate-800/60', className)}>
       {children}
     </Tag>
   );
@@ -29,7 +29,7 @@ export function CardHeader({ title, subtitle, action, className }: CardHeaderPro
   return (
     <div className={cx('flex flex-wrap items-start justify-between gap-3 px-5 pt-5', className)}>
       <div>
-        <h3 className="text-lg font-semibold text-white">{title}</h3>
+        <h3 className="text-pretty text-lg font-semibold text-white">{title}</h3>
         {subtitle && <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>}
       </div>
       {action}

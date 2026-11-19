@@ -14,10 +14,18 @@ import { Field, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 import { useWatchlistData } from '@/hooks/useWatchlistData';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
+import { UndoNotice } from './ui/UndoNotice';
 
 export default function Watchlist() {
   const { entries, status, pending, error: storageError, addEntry, deleteEntry, resetInvalid } = useWatchlistData();
   const [pendingCoin, setPendingCoin] = useState('');
+  const undoDelete = useUndoDelete({
+    items: entries,
+    remove: deleteEntry,
+    restore: addEntry,
+    describe: (entry) => `${coinLabel(entry.cryptoId)} from your watchlist`,
+  });
 
   const ids = useMemo(() => [...new Set(entries.map((entry) => entry.cryptoId))], [entries]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -27,10 +35,7 @@ export default function Watchlist() {
     return COINS.filter((coin) => !tracked.has(coin.id));
   }, [entries]);
 
-  const combinedPrice = useMemo(
-    () => ids.reduce((sum, id) => sum + (coins.get(id)?.current_price ?? 0), 0),
-    [ids, coins]
-  );
+  const quotedCount = ids.filter((id) => coins.has(id)).length;
 
   async function addCoin() {
     const cryptoId = pendingCoin || availableCoins[0]?.id;
@@ -40,15 +45,21 @@ export default function Watchlist() {
     setPendingCoin('');
   }
 
-  async function removeCoin(id: string) {
-    await deleteEntry(id);
-  }
-
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Watchlist</h2>
+          <h2 className="text-xl font-semibold text-white">Watchlist</h2>
           <p className="text-sm text-slate-400">Track the coins you care about</p>
         </div>
         <div className="flex items-end gap-2">
@@ -82,7 +93,7 @@ export default function Watchlist() {
       {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
         <Card className="lg:col-span-2">
           <CardHeader
             title="My watchlist"
@@ -98,17 +109,17 @@ export default function Watchlist() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[22rem] text-sm">
+              <table className="w-full min-w-0 text-sm sm:min-w-[22rem]">
                 <caption className="sr-only">Tracked cryptocurrencies</caption>
                 <thead>
-                  <tr className="border-y border-slate-700 bg-slate-900/40 text-left">
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Coin</th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Price</th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">24h</th>
-                    <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 sm:table-cell">
+                  <tr className="border-y border-slate-700 text-left text-xs text-slate-400">
+                    <th scope="col" className="px-3 py-3 font-medium sm:px-5">Coin</th>
+                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Price</th>
+                    <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">24h</th>
+                    <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">
                       Market cap
                     </th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 text-center font-semibold text-slate-200">
+                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">
                       Actions
                     </th>
                   </tr>
@@ -120,28 +131,34 @@ export default function Watchlist() {
                       <tr key={entry.id} className="border-b border-slate-700/60 last:border-0">
                         <td className="px-3 py-3 sm:px-5">
                           <div className="flex items-center gap-3">
-                            <CoinAvatar src={coin?.image} alt={coinLabel(entry.cryptoId)} size={28} />
+                            <CoinAvatar src={coin?.image} name={coinLabel(entry.cryptoId)} size={28} />
                             <div>
                               <p className="font-semibold text-white">{coinLabel(entry.cryptoId)}</p>
                               <p className="text-xs text-slate-400">{coinSymbol(entry.cryptoId)}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 sm:px-5 tabular-nums text-white">
-                          {coin ? formatPrice(coin.current_price) : <span className="text-slate-500">—</span>}
+                        <td className="px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:hidden">
+                          <p>{coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}</p>
+                          <p className={`text-xs ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
+                            {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
+                          </p>
                         </td>
-                        <td className={`px-3 py-3 sm:px-5 tabular-nums ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-500'}`}>
+                        <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:table-cell">
+                          {coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className={`hidden px-3 py-3 text-right tabular-nums sm:px-5 sm:table-cell ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
                           {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
                         </td>
-                        <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-300 sm:table-cell">
+                        <td className="hidden px-3 py-3 text-right tabular-nums text-slate-300 sm:px-5 sm:table-cell">
                           {coin ? formatCompactCurrency(coin.market_cap) : '—'}
                         </td>
-                        <td className="px-3 py-3 sm:px-5 text-center">
+                        <td className="px-3 py-3 text-right sm:px-5">
                           <IconButton
                             label={`Remove ${coinLabel(entry.cryptoId)} from watchlist`}
                             variant="danger"
-                            disabled={pending}
-                            onClick={() => removeCoin(entry.id)}
+                            disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                            onClick={() => void undoDelete.deleteItem(entry.id)}
                           >
                             <FiTrash2 size={16} aria-hidden="true" />
                           </IconButton>
@@ -156,12 +173,14 @@ export default function Watchlist() {
         </Card>
 
         <div className="space-y-4">
-          <StatTile label="Tracked assets" value={entries.length} />
-          <StatTile
-            label="Combined price"
-            value={formatCompactCurrency(combinedPrice)}
-            hint="Sum of latest prices (not market cap)"
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <StatTile label="Tracked assets" value={entries.length} />
+            <StatTile
+              label="Quote coverage"
+              value={`${quotedCount} / ${entries.length}`}
+              hint={quotedCount === entries.length ? 'All tracked coins have quotes' : 'Tracked coins with an available quote'}
+            />
+          </div>
           <TopMovers ids={ids} coins={coins} />
         </div>
       </div>
@@ -198,7 +217,7 @@ function TopMovers({
           >
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-orange-400">#{index + 1}</span>
-              <CoinAvatar src={mover.image} alt={mover.name} size={22} />
+              <CoinAvatar src={mover.image} name={mover.name} size={22} />
               <div>
                 <p className="text-sm font-semibold text-white">{mover.symbol.toUpperCase()}</p>
                 <p className="text-xs text-slate-400">{mover.name}</p>

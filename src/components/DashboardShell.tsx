@@ -7,7 +7,7 @@ import { Button } from './ui/Button';
 import { useUserDataContext } from './UserDataProvider';
 
 const DashboardTabs = dynamic(() => import('./DashboardTabs'), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-slate-800/60" aria-hidden="true" />,
+  loading: () => <div className="h-64 rounded-xl bg-slate-800/60" aria-hidden="true" />,
 });
 
 export default function DashboardShell() {
@@ -31,9 +31,9 @@ export default function DashboardShell() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-white">{mode === 'cloud' ? 'Cloud account' : 'This device'}</p>
-          <p className="text-sm text-slate-400">
+          <p className="break-words text-sm text-slate-400">
             {mode === 'cloud' ? identity?.email : 'Changes stay in this browser. No account is required.'}
           </p>
         </div>

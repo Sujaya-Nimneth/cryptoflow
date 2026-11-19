@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { coinIdSchema } from './coins';
 
 const identifier = z.uuid();
-const positiveAmount = z.number().finite().positive().max(1_000_000_000_000);
+export const MAX_POSITIVE_AMOUNT = 1_000_000_000_000;
+const positiveAmount = z.number().finite().positive().max(MAX_POSITIVE_AMOUNT);
 const timestamp = z.iso.datetime();
 
 export const portfolioHoldingSchema = z.strictObject({

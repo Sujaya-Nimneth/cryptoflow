@@ -6,6 +6,9 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPrice } from '@/lib/format';
 import { isAlertTriggered } from '@/lib/alerts';
+import { firstInvalidField, positiveAmountError, type FieldErrors } from '@/lib/formValidation';
+import { MAX_POSITIVE_AMOUNT } from '@/lib/userDataSchemas';
+import { useExpandedForm } from '@/hooks/useExpandedForm';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -13,6 +16,8 @@ import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 import { useAlertsData } from '@/hooks/useAlertsData';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
+import { UndoNotice } from './ui/UndoNotice';
 
 interface DraftAlert {
   cryptoId: string;
@@ -21,12 +26,19 @@ interface DraftAlert {
 }
 
 const EMPTY_DRAFT: DraftAlert = { cryptoId: 'bitcoin', direction: 'above', targetPrice: '' };
+const ALERT_FIELDS = ['targetPrice'] as const;
 
 export default function MarketAlerts() {
   const { alerts, status, pending, error: storageError, addAlert, deleteAlert, resetInvalid } = useAlertsData();
-  const [showForm, setShowForm] = useState(false);
+  const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors<'targetPrice'>>({});
+  const undoDelete = useUndoDelete({
+    items: alerts,
+    remove: deleteAlert,
+    restore: addAlert,
+    describe: (alert) => `${coinLabel(alert.cryptoId)} alert`,
+  });
 
   const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -45,46 +57,62 @@ export default function MarketAlerts() {
   );
 
   const triggeredCount = evaluated.filter((alert) => alert.triggered).length;
+  const checksRunning = !loading && !error && freshness !== 'stale' && updatedAt !== undefined;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const targetPrice = Number(draft.targetPrice);
-
-    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
-      setFormError('Enter a target price greater than zero.');
-      return;
-    }
+    const nextErrors = { targetPrice: positiveAmountError(draft.targetPrice, 'Target price') ?? undefined };
+    setErrors(nextErrors);
+    if (firstInvalidField(event.currentTarget, nextErrors, ALERT_FIELDS)) return;
 
     const saved = await addAlert({
       id: crypto.randomUUID(),
       cryptoId: draft.cryptoId,
       direction: draft.direction,
-      targetPrice,
+      targetPrice: Number(draft.targetPrice),
       createdAt: new Date().toISOString(),
     });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
-    setFormError(null);
-    setShowForm(false);
+    setErrors({});
+    closeForm();
   }
 
-  async function handleDelete(id: string) {
-    await deleteAlert(id);
+  function updateDraft(field: keyof DraftAlert, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    if (field === 'targetPrice') setErrors({});
   }
 
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Market alerts</h2>
-          <p className="text-sm text-slate-400" aria-live="polite">
+          <h2 className="text-xl font-semibold text-white">Market alerts</h2>
+          <p className="text-sm text-slate-400">
             {loading
               ? 'Checking live prices…'
-              : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered · Checks every 30 seconds while open`}
+              : error
+                ? 'Checks paused while price data is unavailable. Retry to resume.'
+                : freshness === 'stale'
+                  ? 'Checks paused because quotes are stale. Refresh prices to resume.'
+                  : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered · Checks every 30 seconds while this dashboard is open`}
           </p>
           {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
+          <p className="mt-1 text-xs text-slate-400">
+            Results appear only on this screen. Email, push, SMS, and background delivery are not connected.
+          </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
@@ -94,23 +122,27 @@ export default function MarketAlerts() {
       {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
-      {showForm && (
+      <div id="alert-form" hidden={!showForm}>
+        {showForm && (
         <Card>
           <CardHeader
             title="Create alert"
             action={
-              <IconButton label="Close form" onClick={() => setShowForm(false)}>
+              <IconButton label="Close form" onClick={closeForm}>
                 <FiX aria-hidden="true" />
               </IconButton>
             }
           />
-          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Coin" htmlFor="alert-coin">
                 <Select
                   id="alert-coin"
+                  name="cryptoId"
+                  autoComplete="off"
+                  required
                   value={draft.cryptoId}
-                  onChange={(event) => setDraft({ ...draft, cryptoId: event.target.value })}
+                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
                 >
                   {COINS.map((coin) => (
                     <option key={coin.id} value={coin.id}>
@@ -123,9 +155,12 @@ export default function MarketAlerts() {
               <Field label="Condition" htmlFor="alert-direction">
                 <Select
                   id="alert-direction"
+                  name="direction"
+                  autoComplete="off"
+                  required
                   value={draft.direction}
                   onChange={(event) =>
-                    setDraft({ ...draft, direction: event.target.value as 'above' | 'below' })
+                    updateDraft('direction', event.target.value)
                   }
                 >
                   <option value="above">Price rises above</option>
@@ -133,37 +168,36 @@ export default function MarketAlerts() {
                 </Select>
               </Field>
 
-              <Field label="Target price (USD)" htmlFor="alert-target">
+              <Field label="Target price (USD)" htmlFor="alert-target" error={errors.targetPrice}>
                 <Input
                   id="alert-target"
+                  name="targetPrice"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="50000"
                   value={draft.targetPrice}
-                  onChange={(event) => setDraft({ ...draft, targetPrice: event.target.value })}
+                  onChange={(event) => updateDraft('targetPrice', event.target.value)}
                 />
               </Field>
             </div>
 
-            {formError && (
-              <p role="alert" className="text-sm text-rose-300">
-                {formError}
-              </p>
-            )}
-
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowForm(false)}>
+              <Button variant="secondary" onClick={closeForm}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Create alert'}</Button>
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-4">
         <StatTile label="Active alerts" value={alerts.length} />
         <StatTile
           label="Triggered"
@@ -177,15 +211,15 @@ export default function MarketAlerts() {
         <EmptyState
           icon={<FiBell size={24} />}
           title="No alerts yet"
-          description="Create an alert to be notified when a coin crosses your target price."
-          action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Create alert</Button>}
+          description="Create a target to see when its price crosses your threshold while this dashboard is open."
+          action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>Create alert</Button>}
         />
       ) : (
         <ul className="space-y-3">
           {evaluated.map((alert) => (
             <li
               key={alert.id}
-              className={`rounded-xl border p-4 ${
+              className={`rounded-lg border p-4 ${
                 alert.triggered
                   ? 'border-orange-500/60 bg-orange-500/10'
                   : 'border-slate-700/70 bg-slate-800/60'
@@ -222,7 +256,7 @@ export default function MarketAlerts() {
                       <dt className="text-slate-400">Current</dt>
                       <dd className="font-semibold tabular-nums text-white">
                         {alert.currentPrice === undefined ? (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-slate-400">—</span>
                         ) : (
                           formatPrice(alert.currentPrice)
                         )}
@@ -234,8 +268,8 @@ export default function MarketAlerts() {
                 <IconButton
                   label={`Delete ${coinLabel(alert.cryptoId)} alert`}
                   variant="danger"
-                  disabled={pending}
-                  onClick={() => handleDelete(alert.id)}
+                  disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                  onClick={() => void undoDelete.deleteItem(alert.id)}
                 >
                   <FiTrash2 size={16} aria-hidden="true" />
                 </IconButton>
@@ -245,26 +279,13 @@ export default function MarketAlerts() {
         </ul>
       )}
 
-      <Card>
-        <CardHeader title="Notification settings" subtitle="Delivery channels for triggered alerts" />
-        <div className="space-y-3 p-5">
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">Email notifications</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">Browser push notifications</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">SMS notifications</span>
-          </label>
-          <p className="text-xs text-slate-500">
-            Delivery is a placeholder — connect Supabase or an email provider to enable it.
-          </p>
-        </div>
-      </Card>
+      <p role="status" className="text-sm text-slate-400">
+        {alerts.length === 0
+          ? 'No targets are being checked.'
+          : checksRunning
+            ? `Checking ${alerts.length} target${alerts.length === 1 ? '' : 's'} while this dashboard stays open. Closing it stops checks.`
+            : 'No checks are running. Wait for a recent quote or retry the price request.'}
+      </p>
     </div>
   );
 }

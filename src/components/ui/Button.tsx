@@ -1,11 +1,10 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ComponentPropsWithRef, ReactNode } from 'react';
 import { cx } from './Card';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md';
 
 const VARIANTS: Record<Variant, string> = {
-  // orange-700 on white text reaches 5.18:1 (AA); orange-500 only reaches 2.8:1.
   primary:
     'bg-orange-700 text-white hover:bg-orange-600 active:bg-orange-800 border border-orange-600/60',
   secondary:
@@ -17,11 +16,11 @@ const VARIANTS: Record<Variant, string> = {
 };
 
 const SIZES: Record<Size, string> = {
-  sm: 'h-8 px-3 text-sm gap-1.5',
-  md: 'h-10 px-4 text-sm gap-2',
+  sm: 'min-h-11 px-3 text-sm gap-1.5',
+  md: 'min-h-11 px-4 text-sm gap-2',
 };
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentPropsWithRef<'button'> {
   variant?: Variant;
   size?: Size;
   children: ReactNode;
@@ -39,7 +38,7 @@ export function Button({
     <button
       type={type}
       className={cx(
-        'inline-flex items-center justify-center rounded-lg font-medium transition',
+        'inline-flex items-center justify-center rounded-lg font-medium transition-colors motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
         'disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],
@@ -53,7 +52,7 @@ export function Button({
   );
 }
 
-interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface IconButtonProps extends ComponentPropsWithRef<'button'> {
   label: string;
   children: ReactNode;
   variant?: Variant;
@@ -66,8 +65,9 @@ export function IconButton({ label, children, variant = 'ghost', className, ...r
       aria-label={label}
       title={label}
       className={cx(
-        'inline-flex h-8 w-8 items-center justify-center rounded-lg transition',
+        'inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400',
+        'disabled:cursor-not-allowed disabled:opacity-50',
         VARIANTS[variant],
         className
       )}

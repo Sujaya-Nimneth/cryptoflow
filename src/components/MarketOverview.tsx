@@ -4,9 +4,11 @@ import { useGlobalMarket } from '@/hooks/useGlobalMarket';
 import { formatCompactCurrency, formatPercent, trendClass } from '@/lib/format';
 import { StatTile } from './ui/StatTile';
 import { DataNotice } from './ui/DataNotice';
+import { useId } from 'react';
 
 export default function MarketOverview() {
   const { data, error, isLoading, mutate } = useGlobalMarket();
+  const headingId = useId();
 
   if (error) {
     return (
@@ -20,8 +22,8 @@ export default function MarketOverview() {
   const dominance = data?.market_cap_percentage.btc;
 
   return (
-    <section aria-label="Global market overview" aria-busy={isLoading} className="space-y-3">
-      <h2 className="text-2xl font-bold text-white">Market overview</h2>
+    <section aria-labelledby={headingId} aria-busy={isLoading} className="space-y-3">
+      <h2 id={headingId} className="text-xl font-semibold text-white">Market overview</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatTile
           label="Global market cap"
@@ -46,5 +48,5 @@ export default function MarketOverview() {
 }
 
 function Skeleton() {
-  return <span className="inline-block h-7 w-24 animate-pulse rounded bg-slate-700" aria-hidden="true" />;
+  return <span className="inline-block h-7 w-24 rounded bg-slate-700" aria-hidden="true" />;
 }

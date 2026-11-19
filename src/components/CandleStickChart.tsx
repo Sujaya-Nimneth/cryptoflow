@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   BarController,
   BarElement,
@@ -44,6 +44,7 @@ const DOWN = '#fb7185';
 export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickChartProps) {
   const [selectedDays, setSelectedDays] = useState<Timeframe>(days);
   const [showData, setShowData] = useState(false);
+  const headingId = useId();
   const { data: candles = [], error, isLoading: loading, mutate } = useSWR(
     ['/api/crypto/ohlc', cryptoId, selectedDays] as const,
     ([, id, timeframe]) => getCryptocurrencyChart(id, timeframe),
@@ -171,25 +172,25 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
   };
 
   return (
-    <section className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-5">
+    <section aria-labelledby={headingId} className="rounded-lg border border-slate-700/70 bg-slate-800/60 p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white">Price chart</h3>
+          <h3 id={headingId} className="text-lg font-semibold text-white">{coinLabel(cryptoId)} candles</h3>
           <p className="text-sm text-slate-400">
             {candles.length > 0 ? `${candles.length} candles · ${formatPrice(closes.at(-1)!)} · ${granularity}` : granularity}
           </p>
         </div>
-        <div role="group" aria-label="Chart timeframe" className="flex gap-1 rounded-lg bg-slate-900/60 p-1">
+        <div role="group" aria-label="Chart timeframe" className="flex flex-wrap gap-2 border-b border-slate-700">
           {TIMEFRAMES.map((frame) => (
             <button
               key={frame.value}
               type="button"
               onClick={() => setSelectedDays(frame.value)}
               aria-pressed={selectedDays === frame.value}
-              className={`rounded-md px-3 py-1 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
+              className={`min-h-11 border-b px-3 py-2 text-sm font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 ${
                 selectedDays === frame.value
-                  ? 'bg-orange-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+                  ? 'border-orange-500 text-white'
+                  : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
               {frame.label}
@@ -198,7 +199,7 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
         </div>
       </div>
 
-      <div className="h-80">
+      <div className="h-52 sm:h-72">
         {loading && (
           <div className="flex h-full items-center justify-center text-slate-400" role="status">
             Loading chart data…
@@ -231,11 +232,11 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
       {candles.length > 0 && (
         <>
           <p className="sr-only">{summary}</p>
-          <Button variant="secondary" size="sm" className="mt-4" aria-expanded={showData} onClick={() => setShowData((open) => !open)}>
+          <Button variant="secondary" size="sm" className="mt-4" aria-expanded={showData} aria-controls="chart-data" onClick={() => setShowData((open) => !open)}>
             {showData ? 'Hide chart data' : 'View chart data'}
           </Button>
-          {showData && (
-            <div className="mt-3 max-h-72 overflow-auto">
+          <div id="chart-data" hidden={!showData} className="mt-3 max-h-72 overflow-auto">
+            {showData && (
               <table className="w-full text-sm">
                 <caption className="sr-only">{summary}</caption>
                 <thead>
@@ -250,8 +251,8 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
     </section>

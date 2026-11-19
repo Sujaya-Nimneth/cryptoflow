@@ -6,12 +6,17 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPercent, formatPrice, formatQuantity, formatSignedPrice } from '@/lib/format';
 import { computeAllocation, computeRows, computeStats } from '@/lib/portfolio';
+import { firstInvalidField, positiveAmountError, type FieldErrors } from '@/lib/formValidation';
+import { MAX_POSITIVE_AMOUNT } from '@/lib/userDataSchemas';
+import { useExpandedForm } from '@/hooks/useExpandedForm';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { UndoNotice } from './ui/UndoNotice';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 
 interface DraftHolding {
@@ -21,12 +26,20 @@ interface DraftHolding {
 }
 
 const EMPTY_DRAFT: DraftHolding = { cryptoId: COINS[0].id, quantity: '', purchasePrice: '' };
+const HOLDING_FIELDS = ['quantity', 'purchasePrice'] as const;
+type HoldingField = typeof HOLDING_FIELDS[number];
 
 export default function PortfolioManagement() {
   const { holdings, status, pending, error: storageError, addHolding, deleteHolding, resetInvalid } = usePortfolioData();
-  const [showForm, setShowForm] = useState(false);
+  const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors<HoldingField>>({});
+  const undoDelete = useUndoDelete({
+    items: holdings,
+    remove: deleteHolding,
+    restore: addHolding,
+    describe: (holding) => `${coinLabel(holding.cryptoId)} holding`,
+  });
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -59,39 +72,52 @@ export default function PortfolioManagement() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const quantity = Number(draft.quantity);
-    const purchasePrice = Number(draft.purchasePrice);
+    const nextErrors: FieldErrors<HoldingField> = {
+      quantity: positiveAmountError(draft.quantity, 'Quantity') ?? undefined,
+      purchasePrice: positiveAmountError(draft.purchasePrice, 'Purchase price') ?? undefined,
+    };
+    setErrors(nextErrors);
+    if (firstInvalidField(event.currentTarget, nextErrors, HOLDING_FIELDS)) return;
 
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setFormError('Quantity must be greater than zero.');
-      return;
-    }
-    if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
-      setFormError('Purchase price must be greater than zero.');
-      return;
-    }
-
-    const saved = await addHolding({ id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice });
+    const saved = await addHolding({
+      id: crypto.randomUUID(),
+      cryptoId: draft.cryptoId,
+      quantity: Number(draft.quantity),
+      purchasePrice: Number(draft.purchasePrice),
+    });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
-    setFormError(null);
-    setShowForm(false);
+    setErrors({});
+    closeForm();
   }
 
-  async function handleDelete(id: string) {
-    await deleteHolding(id);
+  function updateDraft(field: keyof DraftHolding, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    if (field !== 'cryptoId') {
+      setErrors((current) => ({ ...current, [field]: undefined }));
+    }
   }
 
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Portfolio management</h2>
+          <h2 className="text-xl font-semibold text-white">Portfolio management</h2>
           <p className="text-sm text-slate-400">
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
@@ -106,16 +132,20 @@ export default function PortfolioManagement() {
         </p>
       )}
 
-      {showForm && (
+      <div id="asset-form" hidden={!showForm}>
+        {showForm && (
         <Card>
           <CardHeader title="Add an asset" subtitle="Record a purchase to track its performance." />
-          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Coin" htmlFor="asset-coin">
                 <Select
                   id="asset-coin"
+                  name="cryptoId"
+                  autoComplete="off"
+                  required
                   value={draft.cryptoId}
-                  onChange={(e) => setDraft({ ...draft, cryptoId: e.target.value })}
+                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
                 >
                   {COINS.map((coin) => (
                     <option key={coin.id} value={coin.id}>
@@ -125,50 +155,53 @@ export default function PortfolioManagement() {
                 </Select>
               </Field>
 
-              <Field label="Quantity" htmlFor="asset-quantity">
+              <Field label="Quantity" htmlFor="asset-quantity" error={errors.quantity}>
                 <Input
                   id="asset-quantity"
+                  name="quantity"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="0.5"
                   value={draft.quantity}
-                  onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+                  onChange={(event) => updateDraft('quantity', event.target.value)}
                 />
               </Field>
 
-              <Field label="Purchase price (USD)" htmlFor="asset-price">
+              <Field label="Purchase price (USD)" htmlFor="asset-price" error={errors.purchasePrice}>
                 <Input
                   id="asset-price"
+                  name="purchasePrice"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="40000"
                   value={draft.purchasePrice}
-                  onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })}
+                  onChange={(event) => updateDraft('purchasePrice', event.target.value)}
                 />
               </Field>
             </div>
 
-            {formError && (
-              <p role="alert" className="text-sm text-rose-300">
-                {formError}
-              </p>
-            )}
-
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowForm(false)}>
+              <Button variant="secondary" onClick={closeForm}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save asset'}</Button>
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatTile label="Total investment" value={formatPrice(stats.totalInvestment)} />
         <StatTile
           label={stats.complete ? (stats.staleHoldings > 0 ? 'Value with stale quotes' : 'Current value') : 'Partial quoted value'}
@@ -192,27 +225,27 @@ export default function PortfolioManagement() {
           <EmptyState
             title="No assets yet"
             description="Add your first purchase to start tracking performance."
-            action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Add asset</Button>}
+            action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>Add asset</Button>}
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-sm">
+            <table className="w-full min-w-0 text-sm md:min-w-[28rem]">
               <caption className="sr-only">Portfolio holdings and performance</caption>
               <thead>
-                <tr className="border-b border-slate-700 bg-slate-900/40 text-left">
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Asset</th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Quantity</th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                <tr className="border-b border-slate-700 text-left text-xs text-slate-400">
+                  <th scope="col" className="px-3 py-3 sm:px-5 font-medium">Asset</th>
+                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Quantity</th>
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Purchase
                   </th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Current
                   </th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 sm:table-cell">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Value
                   </th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Gain / loss</th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 text-center font-semibold text-slate-200">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">Gain / loss</th>
+                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">
                     Actions
                   </th>
                 </tr>
@@ -226,31 +259,40 @@ export default function PortfolioManagement() {
                         <p className="font-semibold text-white">{coinLabel(row.cryptoId)}</p>
                         <p className="text-xs text-slate-400">{coinSymbol(row.cryptoId)}</p>
                       </td>
-                      <td className="px-3 py-3 sm:px-5 tabular-nums text-slate-200">
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:hidden">
+                        <p>{formatQuantity(row.quantity)}</p>
+                        <p className="mt-1 whitespace-nowrap text-xs text-white">{row.value === undefined ? 'Unavailable' : formatPrice(row.value)}</p>
+                        <p className="text-xs text-slate-400">Value</p>
+                        <p className={`mt-1 whitespace-nowrap text-xs font-semibold ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}
+                        </p>
+                        <p className="text-xs text-slate-400">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>
+                      </td>
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {formatQuantity(row.quantity)}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {formatPrice(row.purchasePrice)}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {row.currentPrice === undefined ? 'Unavailable' : formatPrice(row.currentPrice)}
                         {row.quoteStatus === 'stale' && <span className="block text-xs text-amber-300">Stale</span>}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-white sm:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 md:table-cell">
                         {row.value === undefined ? 'Unavailable' : formatPrice(row.value)}
                       </td>
                       <td
-                        className={`px-3 py-3 sm:px-5 tabular-nums ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
+                        className={`hidden px-3 py-3 text-right tabular-nums sm:px-5 md:table-cell ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
                       >
                         <p className="font-semibold">{row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}</p>
                         <p className="text-xs">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>
                       </td>
-                      <td className="px-3 py-3 sm:px-5 text-center">
+                      <td className="px-3 py-3 text-right sm:px-5">
                         <IconButton
                           label={`Remove ${coinLabel(row.cryptoId)}`}
                           variant="danger"
-                          disabled={pending}
-                          onClick={() => handleDelete(row.id)}
+                          disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                          onClick={() => void undoDelete.deleteItem(row.id)}
                         >
                           <FiTrash2 size={16} aria-hidden="true" />
                         </IconButton>
@@ -286,7 +328,7 @@ export default function PortfolioManagement() {
                     aria-label={`${coinSymbol(row.cryptoId)} allocation`}
                   >
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-orange-600 to-amber-500"
+                      className="h-full rounded-full bg-orange-500"
                       style={{ width: `${row.share}%` }}
                     />
                   </div>
@@ -309,7 +351,7 @@ export default function PortfolioManagement() {
                       {formatQuantity(row.quantity)} units
                     </p>
                   </div>
-                  <p className="font-semibold tabular-nums text-orange-300">
+                  <p className="font-semibold tabular-nums text-white">
                     {formatPrice(row.value!)}
                   </p>
                 </li>

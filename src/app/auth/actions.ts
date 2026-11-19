@@ -1,12 +1,14 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { credentialsSchema, safeAuthRedirect } from '@/lib/authSchemas';
+import { authErrorMessage, credentialsSchema, safeAuthRedirect, type CredentialField } from '@/lib/authSchemas';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 
 export interface AuthActionState {
   message: string | null;
   needsConfirmation: boolean;
+  field?: CredentialField;
+  values?: { email: string; password: string };
 }
 
 export async function authenticate(
@@ -19,7 +21,12 @@ export async function authenticate(
     password: formData.get('password'),
   });
   if (!parsed.success) {
-    return { message: 'Enter a valid email and a password with at least eight letters and numbers.', needsConfirmation: false };
+    const emailIssue = parsed.error.issues.some((issue) => issue.path[0] === 'email');
+    return {
+      message: emailIssue ? 'Enter a valid email address.' : 'Use 8–128 password characters, including letters and numbers.',
+      needsConfirmation: false,
+      field: emailIssue ? 'email' : 'password',
+    };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -29,11 +36,23 @@ export async function authenticate(
 
   if (mode === 'sign-up') {
     const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { message: 'Could not create the account. Check the details and try again.', needsConfirmation: false };
+    if (error) {
+      return {
+        ...authErrorMessage(mode, error),
+        needsConfirmation: false,
+        values: { email, password: '' },
+      };
+    }
     if (!data.session) return { message: 'Check your email to confirm the account, then sign in.', needsConfirmation: true };
   } else {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { message: 'Email or password is incorrect, or the email is not confirmed.', needsConfirmation: false };
+    if (error) {
+      return {
+        ...authErrorMessage(mode, error),
+        needsConfirmation: false,
+        values: { email, password: '' },
+      };
+    }
   }
 
   redirect(next);

@@ -17,9 +17,9 @@ export function LastUpdated() {
   }, []);
 
   return (
-    <div className="text-right">
+    <div className="shrink-0 text-right text-xs sm:text-base">
       <p className="text-xs text-slate-400">Local time</p>
-      <p className="font-semibold tabular-nums text-white" suppressHydrationWarning>
+      <p className="whitespace-nowrap font-semibold tabular-nums text-white" suppressHydrationWarning>
         {now
           ? now.toLocaleTimeString('en-US', {
               hour: '2-digit',
