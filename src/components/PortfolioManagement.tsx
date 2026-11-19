@@ -259,7 +259,12 @@ export default function PortfolioManagement() {
                         <p className="font-semibold text-white">{coinLabel(row.cryptoId)}</p>
                         <p className="text-xs text-slate-400">{coinSymbol(row.cryptoId)}</p>
                       </td>
-                      <td className="px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5">
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:hidden">
+                        <p>{formatQuantity(row.quantity)}</p>
+                        <p className="mt-1 whitespace-nowrap text-xs text-white">{row.value === undefined ? 'Unavailable' : formatPrice(row.value)}</p>
+                        <p className="text-xs text-slate-400">Value</p>
+                      </td>
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {formatQuantity(row.quantity)}
                       </td>
                       <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
@@ -269,7 +274,7 @@ export default function PortfolioManagement() {
                         {row.currentPrice === undefined ? 'Unavailable' : formatPrice(row.currentPrice)}
                         {row.quoteStatus === 'stale' && <span className="block text-xs text-amber-300">Stale</span>}
                       </td>
-                      <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 md:table-cell">
                         {row.value === undefined ? 'Unavailable' : formatPrice(row.value)}
                       </td>
                       <td
@@ -342,7 +347,7 @@ export default function PortfolioManagement() {
                       {formatQuantity(row.quantity)} units
                     </p>
                   </div>
-                  <p className="font-semibold tabular-nums text-orange-300">
+                  <p className="font-semibold tabular-nums text-white">
                     {formatPrice(row.value!)}
                   </p>
                 </li>

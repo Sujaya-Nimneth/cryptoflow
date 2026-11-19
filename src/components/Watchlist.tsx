@@ -93,7 +93,7 @@ export default function Watchlist() {
       {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
         <Card className="lg:col-span-2">
           <CardHeader
             title="My watchlist"

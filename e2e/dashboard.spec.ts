@@ -271,3 +271,21 @@ test('aligns numeric data and keeps visible controls touch-sized in populated pa
   }
 });
 
+test('keeps portfolio amounts intact and holding values visible on a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/?tab=portfolio');
+  await page.getByRole('button', { name: 'Add asset' }).first().click();
+  await page.getByLabel('Quantity', { exact: true }).fill('0.5');
+  await page.getByLabel('Purchase price (USD)').fill('40000');
+  await page.getByRole('button', { name: 'Save asset' }).click();
+  const summary = page.getByText('Total investment').locator('..');
+  const amount = summary.getByText('$20,000.00');
+  const summaryBox = await summary.boundingBox();
+  const amountBox = await amount.boundingBox();
+  expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(summaryBox!.x + summaryBox!.width);
+  expect(await amount.evaluate((element) => getComputedStyle(element).whiteSpace)).toBe('nowrap');
+  const holding = page.getByRole('row', { name: /Bitcoin BTC/ });
+  await expect(holding.locator('p').filter({ hasText: /^\$32,500\.00$/ })).toBeVisible();
+  await expect(holding.getByText('Value', { exact: true })).toBeVisible();
+});
+

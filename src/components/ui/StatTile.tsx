@@ -18,7 +18,7 @@ export function StatTile({ label, value, hint, tone = 'neutral' }: StatTileProps
   return (
     <div className={cx('h-full rounded-lg border p-4', TONES[tone])}>
       <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-1 break-words text-2xl font-semibold tabular-nums">{value}</p>
+      <p className="mt-1 whitespace-nowrap text-xl font-semibold tabular-nums sm:text-2xl">{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
     </div>
   );
