@@ -7,10 +7,10 @@ import { getVerifiedIdentity } from '@/lib/supabase/server';
 
 const tabSkeleton = (
   <div className="space-y-4" aria-hidden="true">
-    <div className="h-9 w-64 animate-pulse rounded bg-slate-800" />
+    <div className="h-9 w-64 rounded bg-slate-800" />
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }, (_, index) => (
-        <div key={index} className="h-52 animate-pulse rounded-xl bg-slate-800/70" />
+        <div key={index} className="h-52 rounded-lg bg-slate-800/70" />
       ))}
     </div>
   </div>
@@ -85,7 +85,7 @@ export default async function Home({ searchParams }: PageProps<'/'>) {
               </ul>
             </div>
           </div>
-          <p className="mt-8 border-t border-slate-700 pt-6 text-center text-sm text-slate-500">
+          <p className="mt-8 border-t border-slate-700 pt-6 text-center text-sm text-slate-400">
             &copy; {new Date().getFullYear()} CryptoFlow Analytics. Prices are informational only,
             not financial advice.
           </p>

@@ -13,7 +13,7 @@ export default function PriceCard({ crypto }: PriceCardProps) {
   const isUp = change >= 0;
 
   return (
-    <article className="group rounded-xl border border-slate-700/70 bg-slate-800/60 p-4 transition hover:border-orange-500/70 hover:bg-slate-800">
+    <article className="group w-full rounded-lg border border-slate-700/70 bg-slate-800/60 p-4 transition-colors hover:border-orange-500/70 motion-reduce:transition-none sm:w-[calc(50%_-_0.5rem)] lg:w-[calc((100%_-_2rem)/3)]">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <CoinAvatar src={crypto.image} name={crypto.name} size={32} />
@@ -28,7 +28,7 @@ export default function PriceCard({ crypto }: PriceCardProps) {
       </div>
 
       <p className="text-xs text-slate-400">Current price</p>
-      <p className="text-2xl font-bold tabular-nums text-white">{formatPrice(crypto.current_price)}</p>
+      <p className="break-words text-2xl font-semibold tabular-nums text-white">{formatPrice(crypto.current_price)}</p>
 
       <div className={cx('mt-3 flex items-center gap-2 rounded-lg px-2 py-1.5', trendBgClass(change))}>
         {isUp ? (

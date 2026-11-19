@@ -97,7 +97,7 @@ export default function MarketAlerts() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Market alerts</h2>
+          <h2 className="text-xl font-semibold text-white">Market alerts</h2>
           <p className="text-sm text-slate-400">
             {loading
               ? 'Checking live prices…'
@@ -197,7 +197,7 @@ export default function MarketAlerts() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-4">
         <StatTile label="Active alerts" value={alerts.length} />
         <StatTile
           label="Triggered"
@@ -219,7 +219,7 @@ export default function MarketAlerts() {
           {evaluated.map((alert) => (
             <li
               key={alert.id}
-              className={`rounded-xl border p-4 ${
+              className={`rounded-lg border p-4 ${
                 alert.triggered
                   ? 'border-orange-500/60 bg-orange-500/10'
                   : 'border-slate-700/70 bg-slate-800/60'
@@ -256,7 +256,7 @@ export default function MarketAlerts() {
                       <dt className="text-slate-400">Current</dt>
                       <dd className="font-semibold tabular-nums text-white">
                         {alert.currentPrice === undefined ? (
-                          <span className="text-slate-500">—</span>
+                          <span className="text-slate-400">—</span>
                         ) : (
                           formatPrice(alert.currentPrice)
                         )}

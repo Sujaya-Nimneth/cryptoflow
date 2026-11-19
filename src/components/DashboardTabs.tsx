@@ -122,7 +122,7 @@ export default function DashboardTabs() {
                   if (tab.id !== 'dashboard') void PRELOADERS[tab.id]();
                 }}
                 className={cx(
-                  'inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap border-b px-2 py-3 text-sm font-medium transition-colors motion-reduce:transition-none sm:flex-none sm:gap-2 sm:px-4',
+                  'inline-flex min-h-12 flex-1 flex-col items-center justify-center gap-1 whitespace-nowrap border-b px-1 py-2 text-xs font-medium transition-colors motion-reduce:transition-none sm:min-h-11 sm:flex-none sm:flex-row sm:gap-2 sm:px-4 sm:py-3 sm:text-sm',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900',
                   selected
                     ? 'border-orange-500 text-white'
