@@ -29,37 +29,54 @@ export async function authenticate(
     };
   }
 
-  const supabase = await createSupabaseServerClient();
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>;
+  try {
+    supabase = await createSupabaseServerClient();
+  } catch {
+    return { message: 'Cloud sign-in is temporarily unavailable. Try again, or continue with device-local storage.', needsConfirmation: false };
+  }
   if (!supabase) return { message: 'Cloud storage is not configured.', needsConfirmation: false };
   const next = safeAuthRedirect(String(formData.get('next') ?? '/'));
   const { email, password } = parsed.data;
 
-  if (mode === 'sign-up') {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      return {
-        ...authErrorMessage(mode, error),
-        needsConfirmation: false,
-        values: { email, password: '' },
-      };
+  try {
+    if (mode === 'sign-up') {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        return {
+          ...authErrorMessage(mode, error),
+          needsConfirmation: false,
+          values: { email, password: '' },
+        };
+      }
+      if (!data.session) return { message: 'Check your email to confirm the account, then sign in.', needsConfirmation: true };
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        return {
+          ...authErrorMessage(mode, error),
+          needsConfirmation: false,
+          values: { email, password: '' },
+        };
+      }
     }
-    if (!data.session) return { message: 'Check your email to confirm the account, then sign in.', needsConfirmation: true };
-  } else {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      return {
-        ...authErrorMessage(mode, error),
-        needsConfirmation: false,
-        values: { email, password: '' },
-      };
-    }
+  } catch {
+    return {
+      message: 'Cloud sign-in is temporarily unavailable. Try again, or continue with device-local storage.',
+      needsConfirmation: false,
+      values: { email, password: '' },
+    };
   }
 
   redirect(next);
 }
 
 export async function signOut(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
-  if (supabase) await supabase.auth.signOut({ scope: 'local' });
+  try {
+    const supabase = await createSupabaseServerClient();
+    if (supabase) await supabase.auth.signOut({ scope: 'local' });
+  } catch {
+    redirect(safeAuthRedirect(String(formData.get('next') ?? '/')));
+  }
   redirect(safeAuthRedirect(String(formData.get('next') ?? '/')));
 }
