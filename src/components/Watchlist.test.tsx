@@ -46,14 +46,14 @@ describe('recoverable watchlist deletion', () => {
     const remove = screen.getByRole('button', { name: 'Remove Bitcoin from watchlist' });
     remove.focus();
     fireEvent.click(remove);
-    const undo = await screen.findByRole('button', { name: 'Undo', exact: true });
+    const undo = await screen.findByRole('button', { name: /^Undo$/ });
     await waitFor(() => expect(undo).toHaveFocus());
     expect(collection.deleteEntry).toHaveBeenCalledWith(collection.entries[0].id);
     undo.focus();
     fireEvent.keyDown(undo, { key: 'Enter' });
     fireEvent.click(undo);
     await waitFor(() => expect(collection.addEntry).toHaveBeenCalledWith(collection.entries[0]));
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Undo', exact: true })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Undo$/ })).not.toBeInTheDocument());
     expect(remove).toHaveFocus();
   });
 
@@ -62,9 +62,9 @@ describe('recoverable watchlist deletion', () => {
     collection.addEntry.mockResolvedValue(false);
     render(<Watchlist />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Bitcoin from watchlist' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Undo', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Undo$/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not restore Bitcoin from your watchlist. Try Undo again.');
-    expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Undo$/ })).toBeEnabled();
   });
 
   it('expires the undo opportunity after fifteen seconds', async () => {
@@ -73,9 +73,9 @@ describe('recoverable watchlist deletion', () => {
     render(<Watchlist />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Bitcoin from watchlist' }));
     await act(async () => { await Promise.resolve(); });
-    expect(screen.getByRole('button', { name: 'Undo', exact: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Undo$/ })).toBeInTheDocument();
     await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
-    expect(screen.queryByRole('button', { name: 'Undo', exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Undo$/ })).not.toBeInTheDocument();
     expect(collection.addEntry).not.toHaveBeenCalled();
   });
 });
