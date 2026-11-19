@@ -24,7 +24,12 @@ function getStore<T>(key: string, schema: z.ZodType<T>, fallback: T): Store<T> {
     stores.set(key, store as Store<unknown>);
   }
   if (store.status === 'loading' && typeof window !== 'undefined') {
-    const loaded = readLocalData(window.localStorage, key, schema, fallback);
+    let loaded: Store<T>;
+    try {
+      loaded = readLocalData(window.localStorage, key, schema, fallback);
+    } catch {
+      loaded = { value: fallback, status: 'unavailable' };
+    }
     store.value = loaded.value;
     store.status = loaded.status;
   }
@@ -66,7 +71,12 @@ export function useLocalUserData<T>(key: string, schema: z.ZodType<T>, fallback:
 
   useEffect(() => {
     if (store.status !== 'loading') return;
-    const loaded = readLocalData(window.localStorage, key, schema, fallback);
+    let loaded: Store<T>;
+    try {
+      loaded = readLocalData(window.localStorage, key, schema, fallback);
+    } catch {
+      loaded = { value: fallback, status: 'unavailable' };
+    }
     stores.set(key, loaded);
     notify(key);
   }, [fallback, key, schema, store.status]);
@@ -80,7 +90,13 @@ export function useLocalUserData<T>(key: string, schema: z.ZodType<T>, fallback:
     } catch {
       return false;
     }
-    if (!writeLocalData(window.localStorage, key, schema, value)) {
+    let saved: boolean;
+    try {
+      saved = writeLocalData(window.localStorage, key, schema, value);
+    } catch {
+      saved = false;
+    }
+    if (!saved) {
       stores.set(key, { ...current, status: 'unavailable' });
       notify(key);
       return false;

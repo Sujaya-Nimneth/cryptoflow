@@ -74,4 +74,17 @@ describe('device-local storage hook', () => {
     expect(result.current.status).toBe('unavailable');
     expect(result.current.value).toEqual(fallback);
   });
+
+  it('survives a browser that throws when localStorage is accessed', async () => {
+    const localStorage = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new DOMException('Storage is blocked', 'SecurityError');
+    });
+    const useLocalUserData = await loadHook();
+    const { result } = renderHook(() => useLocalUserData('test:portfolio', localPortfolioSchema, fallback));
+    await waitFor(() => expect(result.current.status).toBe('unavailable'));
+    expect(result.current.setValue(value)).toBe(false);
+    act(() => result.current.resetInvalid());
+    expect(result.current.status).toBe('unavailable');
+    localStorage.mockRestore();
+  });
 });
