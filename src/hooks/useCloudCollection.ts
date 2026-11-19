@@ -77,12 +77,16 @@ export function useCloudCollection<TItem extends { id: string }, TState>({
     }
   }, []);
 
+  const refreshAfterMutation = useCallback(async () => {
+    await mutate(undefined, { throwOnError: true });
+  }, [mutate]);
+
   const add = useCallback(async (item: TItem) => {
     if (!client || !userId) return false;
     const generation = beginMutation();
     try {
       await insert(client, item);
-      await mutate();
+      await refreshAfterMutation();
       if (generation !== mutationGeneration.current) return false;
       return true;
     } catch (cause) {
@@ -91,14 +95,14 @@ export function useCloudCollection<TItem extends { id: string }, TState>({
     } finally {
       finishMutation(generation);
     }
-  }, [beginMutation, client, finishMutation, insert, mutate, reportMutationError, userId]);
+  }, [beginMutation, client, finishMutation, insert, refreshAfterMutation, reportMutationError, userId]);
 
   const deleteItem = useCallback(async (id: string) => {
     if (!client || !userId) return false;
     const generation = beginMutation();
     try {
       await remove(client, userId, id);
-      await mutate();
+      await refreshAfterMutation();
       if (generation !== mutationGeneration.current) return false;
       return true;
     } catch (cause) {
@@ -107,7 +111,7 @@ export function useCloudCollection<TItem extends { id: string }, TState>({
     } finally {
       finishMutation(generation);
     }
-  }, [beginMutation, client, finishMutation, mutate, remove, reportMutationError, userId]);
+  }, [beginMutation, client, finishMutation, refreshAfterMutation, remove, reportMutationError, userId]);
 
   const status: LocalDataStatus = isLoading ? 'loading' : error ? 'unavailable' : 'ready';
   return {

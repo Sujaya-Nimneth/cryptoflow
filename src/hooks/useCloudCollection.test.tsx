@@ -80,6 +80,16 @@ describe('cloud collection mutations', () => {
     expect(result.current.pending).toBe(false);
   });
 
+  it('does not report success when post-mutation refresh fails', async () => {
+    controls.insert.mockResolvedValue(undefined);
+    controls.mutate.mockRejectedValue(new Error('Could not load your cloud watchlist.'));
+    const { result } = renderHook(() => useCloudCollection(options()));
+    await act(async () => { expect(await result.current.add(entry)).toBe(false); });
+    expect(controls.mutate).toHaveBeenCalledWith(undefined, { throwOnError: true });
+    expect(result.current.error).toBe('Could not load your cloud watchlist.');
+    expect(result.current.pending).toBe(false);
+  });
+
   it('does not let an old account mutation report success or clear pending', async () => {
     const finishers: Array<() => void> = [];
     let insertions = 0;
