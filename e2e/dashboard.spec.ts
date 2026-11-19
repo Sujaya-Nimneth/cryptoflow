@@ -108,3 +108,33 @@ test('persists portfolio, watchlist, and alert additions across tabs and reloads
   await page.getByRole('tab', { name: 'Portfolio' }).click();
   await expect(page.getByRole('cell', { name: 'Bitcoin BTC' })).toBeVisible();
 });
+
+test('validates amounts inline and restores form focus on mobile and desktop', async ({ page }) => {
+  await page.goto('/?tab=portfolio');
+  await page.getByRole('button', { name: 'Add asset' }).first().click();
+  await expect(page.getByLabel('Coin', { exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Save asset' }).click();
+  const quantity = page.getByLabel('Quantity', { exact: true });
+  await expect(quantity).toBeFocused();
+  await expect(quantity).toHaveAttribute('aria-invalid', 'true');
+  await expect(quantity).toHaveAccessibleDescription('Enter a quantity.');
+  await expect(page.getByLabel('Purchase price (USD)')).toHaveAccessibleDescription('Enter a purchase price.');
+  await quantity.fill('0.5');
+  await expect(quantity).not.toHaveAttribute('aria-invalid', 'true');
+  await page.getByLabel('Purchase price (USD)').fill('1000000000001');
+  await page.getByRole('button', { name: 'Save asset' }).click();
+  await expect(page.getByLabel('Purchase price (USD)')).toBeFocused();
+  await expect(page.getByText('Purchase price must not exceed $1 trillion.')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'Add asset' }).first()).toBeFocused();
+
+  await page.getByRole('tab', { name: 'Alerts' }).click();
+  await page.getByRole('button', { name: 'New alert' }).first().click();
+  await page.locator('form').getByRole('button', { name: 'Create alert', exact: true }).click();
+  const target = page.getByLabel('Target price (USD)');
+  await expect(target).toBeFocused();
+  await expect(target).toHaveAccessibleDescription('Enter a target price.');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('button', { name: 'New alert' }).first()).toBeFocused();
+});
+

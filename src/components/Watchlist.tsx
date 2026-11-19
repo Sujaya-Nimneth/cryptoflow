@@ -120,7 +120,7 @@ export default function Watchlist() {
                       <tr key={entry.id} className="border-b border-slate-700/60 last:border-0">
                         <td className="px-3 py-3 sm:px-5">
                           <div className="flex items-center gap-3">
-                            <CoinAvatar src={coin?.image} alt={coinLabel(entry.cryptoId)} size={28} />
+                            <CoinAvatar src={coin?.image} name={coinLabel(entry.cryptoId)} size={28} />
                             <div>
                               <p className="font-semibold text-white">{coinLabel(entry.cryptoId)}</p>
                               <p className="text-xs text-slate-400">{coinSymbol(entry.cryptoId)}</p>
@@ -198,7 +198,7 @@ function TopMovers({
           >
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-orange-400">#{index + 1}</span>
-              <CoinAvatar src={mover.image} alt={mover.name} size={22} />
+              <CoinAvatar src={mover.image} name={mover.name} size={22} />
               <div>
                 <p className="text-sm font-semibold text-white">{mover.symbol.toUpperCase()}</p>
                 <p className="text-xs text-slate-400">{mover.name}</p>

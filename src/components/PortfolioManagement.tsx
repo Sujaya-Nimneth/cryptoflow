@@ -6,6 +6,9 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPercent, formatPrice, formatQuantity, formatSignedPrice } from '@/lib/format';
 import { computeAllocation, computeRows, computeStats } from '@/lib/portfolio';
+import { firstInvalidField, positiveAmountError, type FieldErrors } from '@/lib/formValidation';
+import { MAX_POSITIVE_AMOUNT } from '@/lib/userDataSchemas';
+import { useExpandedForm } from '@/hooks/useExpandedForm';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -21,12 +24,14 @@ interface DraftHolding {
 }
 
 const EMPTY_DRAFT: DraftHolding = { cryptoId: COINS[0].id, quantity: '', purchasePrice: '' };
+const HOLDING_FIELDS = ['quantity', 'purchasePrice'] as const;
+type HoldingField = typeof HOLDING_FIELDS[number];
 
 export default function PortfolioManagement() {
   const { holdings, status, pending, error: storageError, addHolding, deleteHolding, resetInvalid } = usePortfolioData();
-  const [showForm, setShowForm] = useState(false);
+  const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors<HoldingField>>({});
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -59,23 +64,30 @@ export default function PortfolioManagement() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const quantity = Number(draft.quantity);
-    const purchasePrice = Number(draft.purchasePrice);
+    const nextErrors: FieldErrors<HoldingField> = {
+      quantity: positiveAmountError(draft.quantity, 'Quantity') ?? undefined,
+      purchasePrice: positiveAmountError(draft.purchasePrice, 'Purchase price') ?? undefined,
+    };
+    setErrors(nextErrors);
+    if (firstInvalidField(event.currentTarget, nextErrors, HOLDING_FIELDS)) return;
 
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      setFormError('Quantity must be greater than zero.');
-      return;
-    }
-    if (!Number.isFinite(purchasePrice) || purchasePrice <= 0) {
-      setFormError('Purchase price must be greater than zero.');
-      return;
-    }
-
-    const saved = await addHolding({ id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice });
+    const saved = await addHolding({
+      id: crypto.randomUUID(),
+      cryptoId: draft.cryptoId,
+      quantity: Number(draft.quantity),
+      purchasePrice: Number(draft.purchasePrice),
+    });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
-    setFormError(null);
-    setShowForm(false);
+    setErrors({});
+    closeForm();
+  }
+
+  function updateDraft(field: keyof DraftHolding, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    if (field !== 'cryptoId') {
+      setErrors((current) => ({ ...current, [field]: undefined }));
+    }
   }
 
   async function handleDelete(id: string) {
@@ -91,7 +103,7 @@ export default function PortfolioManagement() {
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
@@ -106,16 +118,20 @@ export default function PortfolioManagement() {
         </p>
       )}
 
-      {showForm && (
+      <div id="asset-form" hidden={!showForm}>
+        {showForm && (
         <Card>
           <CardHeader title="Add an asset" subtitle="Record a purchase to track its performance." />
-          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Coin" htmlFor="asset-coin">
                 <Select
                   id="asset-coin"
+                  name="cryptoId"
+                  autoComplete="off"
+                  required
                   value={draft.cryptoId}
-                  onChange={(e) => setDraft({ ...draft, cryptoId: e.target.value })}
+                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
                 >
                   {COINS.map((coin) => (
                     <option key={coin.id} value={coin.id}>
@@ -125,48 +141,51 @@ export default function PortfolioManagement() {
                 </Select>
               </Field>
 
-              <Field label="Quantity" htmlFor="asset-quantity">
+              <Field label="Quantity" htmlFor="asset-quantity" error={errors.quantity}>
                 <Input
                   id="asset-quantity"
+                  name="quantity"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="0.5"
                   value={draft.quantity}
-                  onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+                  onChange={(event) => updateDraft('quantity', event.target.value)}
                 />
               </Field>
 
-              <Field label="Purchase price (USD)" htmlFor="asset-price">
+              <Field label="Purchase price (USD)" htmlFor="asset-price" error={errors.purchasePrice}>
                 <Input
                   id="asset-price"
+                  name="purchasePrice"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="40000"
                   value={draft.purchasePrice}
-                  onChange={(e) => setDraft({ ...draft, purchasePrice: e.target.value })}
+                  onChange={(event) => updateDraft('purchasePrice', event.target.value)}
                 />
               </Field>
             </div>
 
-            {formError && (
-              <p role="alert" className="text-sm text-rose-300">
-                {formError}
-              </p>
-            )}
-
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowForm(false)}>
+              <Button variant="secondary" onClick={closeForm}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save asset'}</Button>
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatTile label="Total investment" value={formatPrice(stats.totalInvestment)} />
@@ -192,7 +211,7 @@ export default function PortfolioManagement() {
           <EmptyState
             title="No assets yet"
             description="Add your first purchase to start tracking performance."
-            action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Add asset</Button>}
+            action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>Add asset</Button>}
           />
         ) : (
           <div className="overflow-x-auto">

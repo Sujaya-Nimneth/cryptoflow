@@ -6,6 +6,9 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPrice } from '@/lib/format';
 import { isAlertTriggered } from '@/lib/alerts';
+import { firstInvalidField, positiveAmountError, type FieldErrors } from '@/lib/formValidation';
+import { MAX_POSITIVE_AMOUNT } from '@/lib/userDataSchemas';
+import { useExpandedForm } from '@/hooks/useExpandedForm';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
@@ -21,12 +24,13 @@ interface DraftAlert {
 }
 
 const EMPTY_DRAFT: DraftAlert = { cryptoId: 'bitcoin', direction: 'above', targetPrice: '' };
+const ALERT_FIELDS = ['targetPrice'] as const;
 
 export default function MarketAlerts() {
   const { alerts, status, pending, error: storageError, addAlert, deleteAlert, resetInvalid } = useAlertsData();
-  const [showForm, setShowForm] = useState(false);
+  const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<FieldErrors<'targetPrice'>>({});
 
   const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -48,24 +52,26 @@ export default function MarketAlerts() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const targetPrice = Number(draft.targetPrice);
-
-    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
-      setFormError('Enter a target price greater than zero.');
-      return;
-    }
+    const nextErrors = { targetPrice: positiveAmountError(draft.targetPrice, 'Target price') ?? undefined };
+    setErrors(nextErrors);
+    if (firstInvalidField(event.currentTarget, nextErrors, ALERT_FIELDS)) return;
 
     const saved = await addAlert({
       id: crypto.randomUUID(),
       cryptoId: draft.cryptoId,
       direction: draft.direction,
-      targetPrice,
+      targetPrice: Number(draft.targetPrice),
       createdAt: new Date().toISOString(),
     });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
-    setFormError(null);
-    setShowForm(false);
+    setErrors({});
+    closeForm();
+  }
+
+  function updateDraft(field: keyof DraftAlert, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    if (field === 'targetPrice') setErrors({});
   }
 
   async function handleDelete(id: string) {
@@ -84,7 +90,7 @@ export default function MarketAlerts() {
           </p>
           {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
@@ -94,23 +100,27 @@ export default function MarketAlerts() {
       {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
-      {showForm && (
+      <div id="alert-form" hidden={!showForm}>
+        {showForm && (
         <Card>
           <CardHeader
             title="Create alert"
             action={
-              <IconButton label="Close form" onClick={() => setShowForm(false)}>
+              <IconButton label="Close form" onClick={closeForm}>
                 <FiX aria-hidden="true" />
               </IconButton>
             }
           />
-          <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="Coin" htmlFor="alert-coin">
                 <Select
                   id="alert-coin"
+                  name="cryptoId"
+                  autoComplete="off"
+                  required
                   value={draft.cryptoId}
-                  onChange={(event) => setDraft({ ...draft, cryptoId: event.target.value })}
+                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
                 >
                   {COINS.map((coin) => (
                     <option key={coin.id} value={coin.id}>
@@ -123,9 +133,12 @@ export default function MarketAlerts() {
               <Field label="Condition" htmlFor="alert-direction">
                 <Select
                   id="alert-direction"
+                  name="direction"
+                  autoComplete="off"
+                  required
                   value={draft.direction}
                   onChange={(event) =>
-                    setDraft({ ...draft, direction: event.target.value as 'above' | 'below' })
+                    updateDraft('direction', event.target.value)
                   }
                 >
                   <option value="above">Price rises above</option>
@@ -133,35 +146,34 @@ export default function MarketAlerts() {
                 </Select>
               </Field>
 
-              <Field label="Target price (USD)" htmlFor="alert-target">
+              <Field label="Target price (USD)" htmlFor="alert-target" error={errors.targetPrice}>
                 <Input
                   id="alert-target"
+                  name="targetPrice"
                   type="number"
                   min="0"
+                  max={MAX_POSITIVE_AMOUNT}
                   step="any"
                   inputMode="decimal"
+                  autoComplete="off"
+                  required
                   placeholder="50000"
                   value={draft.targetPrice}
-                  onChange={(event) => setDraft({ ...draft, targetPrice: event.target.value })}
+                  onChange={(event) => updateDraft('targetPrice', event.target.value)}
                 />
               </Field>
             </div>
 
-            {formError && (
-              <p role="alert" className="text-sm text-rose-300">
-                {formError}
-              </p>
-            )}
-
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setShowForm(false)}>
+              <Button variant="secondary" onClick={closeForm}>
                 Cancel
               </Button>
               <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Create alert'}</Button>
             </div>
           </form>
         </Card>
-      )}
+        )}
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatTile label="Active alerts" value={alerts.length} />
@@ -178,7 +190,7 @@ export default function MarketAlerts() {
           icon={<FiBell size={24} />}
           title="No alerts yet"
           description="Create an alert to be notified when a coin crosses your target price."
-          action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Create alert</Button>}
+          action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>Create alert</Button>}
         />
       ) : (
         <ul className="space-y-3">

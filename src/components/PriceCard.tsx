@@ -16,7 +16,7 @@ export default function PriceCard({ crypto }: PriceCardProps) {
     <article className="group rounded-xl border border-slate-700/70 bg-slate-800/60 p-4 transition hover:border-orange-500/70 hover:bg-slate-800">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <CoinAvatar src={crypto.image} alt={crypto.name} size={32} />
+          <CoinAvatar src={crypto.image} name={crypto.name} size={32} />
           <div className="min-w-0">
             <h3 className="truncate font-semibold text-white">{crypto.name}</h3>
             <p className="text-xs uppercase text-slate-400">{crypto.symbol}</p>
