@@ -29,6 +29,9 @@ jobs:
       - name: Audit production dependencies
         run: npm run audit:prod
 
+      - name: Generate Next.js route types
+        run: npx next typegen
+
       - name: Typecheck
         run: npm run typecheck
 
