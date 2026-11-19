@@ -28,6 +28,8 @@ export const COINS: CoinOption[] = [
 
 const COIN_MAP = new Map(COINS.map((coin) => [coin.id, coin]));
 
+export const coinIdSchema = z.enum(COINS.map((coin) => coin.id) as [string, ...string[]]);
+
 export function findCoin(id: string): CoinOption | undefined {
   return COIN_MAP.get(id);
 }
@@ -41,3 +43,5 @@ export function coinSymbol(id: string): string {
   const coin = COIN_MAP.get(id);
   return coin ? coin.symbol : id.slice(0, 4).toUpperCase();
 }
+import { z } from 'zod';
+
