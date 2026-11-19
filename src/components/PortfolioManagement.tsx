@@ -12,11 +12,12 @@ import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
+import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { useLocalUserData } from '@/hooks/useLocalUserData';
+import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
+import { localPortfolioSchema } from '@/lib/userDataSchemas';
 
-const SEED_HOLDINGS: PortfolioHolding[] = [
-  { id: 'seed-btc', cryptoId: 'bitcoin', quantity: 0.5, purchasePrice: 40000 },
-  { id: 'seed-eth', cryptoId: 'ethereum', quantity: 5, purchasePrice: 2000 },
-];
+const EMPTY_PORTFOLIO = { version: 1 as const, holdings: [] as PortfolioHolding[] };
 
 interface DraftHolding {
   cryptoId: string;
@@ -27,30 +28,44 @@ interface DraftHolding {
 const EMPTY_DRAFT: DraftHolding = { cryptoId: COINS[0].id, quantity: '', purchasePrice: '' };
 
 export default function PortfolioManagement() {
-  const [holdings, setHoldings] = useState<PortfolioHolding[]>(SEED_HOLDINGS);
+  const { value: portfolio, status, setValue: setPortfolio, resetInvalid } = useLocalUserData(
+    LOCAL_USER_DATA_KEYS.portfolio,
+    localPortfolioSchema,
+    EMPTY_PORTFOLIO
+  );
+  const holdings = portfolio.holdings;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
-  const { coins, loading } = useMarketCoins(ids);
+  const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
 
-  const prices = useMemo(
+  const quotes = useMemo(
     () =>
       new Map(
-        [...coins.entries()].map(([id, coin]) => [id, coin.current_price] as const)
+        [...coins.entries()].flatMap(([id, coin]) => updatedAt === undefined ? [] : [[id, {
+          price: coin.current_price,
+          freshness: freshness === 'stale' ? 'stale' as const : 'live' as const,
+          updatedAt,
+        }] as const])
       ),
-    [coins]
+    [coins, freshness, updatedAt]
   );
 
-  const rows = useMemo(() => computeRows(holdings, prices), [holdings, prices]);
+  const rows = useMemo(() => computeRows(holdings, quotes), [holdings, quotes]);
   const stats = useMemo(() => computeStats(rows), [rows]);
   const allocation = useMemo(
-    () => computeAllocation(rows, stats.currentValue),
-    [rows, stats.currentValue]
+    () => computeAllocation(rows, stats.partialValue),
+    [rows, stats.partialValue]
   );
 
-  const isProfit = stats.totalReturn >= 0;
+  const isProfit = (stats.totalReturn ?? 0) >= 0;
+  const valuationMessage = stats.missingHoldings > 0
+    ? `${stats.pricedHoldings} of ${rows.length} holdings have quotes. ${formatPrice(stats.partialValue)} is a partial value, not your complete portfolio value.`
+    : stats.staleHoldings > 0
+      ? `${stats.staleHoldings} holding${stats.staleHoldings === 1 ? '' : 's'} use stale quotes. The total is not a current valuation.`
+      : 'All holdings are valued with recent market quotes.';
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,22 +81,21 @@ export default function PortfolioManagement() {
       return;
     }
 
-    setHoldings((current) => [
-      ...current,
-      {
-        id: `${draft.cryptoId}-${Date.now()}`,
-        cryptoId: draft.cryptoId,
-        quantity,
-        purchasePrice,
-      },
-    ]);
+    const saved = setPortfolio((current) => ({
+      version: 1,
+      holdings: [...current.holdings, { id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice }],
+    }));
+    if (!saved) return;
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setShowForm(false);
   }
 
   function handleDelete(id: string) {
-    setHoldings((current) => current.filter((holding) => holding.id !== id));
+    setPortfolio((current) => ({
+      version: 1,
+      holdings: current.holdings.filter((holding) => holding.id !== id),
+    }));
   }
 
   return (
@@ -90,13 +104,22 @@ export default function PortfolioManagement() {
         <div>
           <h2 className="text-2xl font-bold text-white">Portfolio management</h2>
           <p className="text-sm text-slate-400">
-            {loading ? 'Syncing live prices…' : 'Valued at the latest market prices'}
+            {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready'}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
+
+      {status === 'invalid' && <div role="alert"><DataNotice message="Saved portfolio data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid portfolio data</Button></div>}
+      {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
+      {error && <DataNotice message={error} onRetry={() => void refresh()} />}
+      {!loading && rows.length > 0 && (
+        <p role="status" className={`rounded-lg p-3 text-sm ${stats.complete && stats.staleHoldings === 0 ? 'bg-slate-800/60 text-slate-300' : 'border border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+          {valuationMessage}
+        </p>
+      )}
 
       {showForm && (
         <Card>
@@ -162,16 +185,20 @@ export default function PortfolioManagement() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatTile label="Total investment" value={formatPrice(stats.totalInvestment)} />
-        <StatTile label="Current value" value={formatPrice(stats.currentValue)} />
+        <StatTile
+          label={stats.complete ? (stats.staleHoldings > 0 ? 'Value with stale quotes' : 'Current value') : 'Partial quoted value'}
+          value={formatPrice(stats.complete ? stats.currentValue! : stats.partialValue)}
+          hint={stats.complete ? undefined : `${stats.missingHoldings} holding${stats.missingHoldings === 1 ? '' : 's'} unavailable`}
+        />
         <StatTile
           label="Total return"
-          value={formatSignedPrice(stats.totalReturn)}
-          tone={isProfit ? 'positive' : 'negative'}
+          value={stats.totalReturn === undefined ? 'Unavailable' : formatSignedPrice(stats.totalReturn)}
+          tone={stats.totalReturn === undefined ? 'neutral' : isProfit ? 'positive' : 'negative'}
         />
         <StatTile
           label="Return"
-          value={formatPercent(stats.returnPercentage)}
-          tone={isProfit ? 'positive' : 'negative'}
+          value={stats.returnPercentage === undefined ? 'Unavailable' : formatPercent(stats.returnPercentage)}
+          tone={stats.returnPercentage === undefined ? 'neutral' : isProfit ? 'positive' : 'negative'}
         />
       </div>
 
@@ -207,7 +234,7 @@ export default function PortfolioManagement() {
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const isGain = row.gainLoss >= 0;
+                  const isGain = (row.gainLoss ?? 0) >= 0;
                   return (
                     <tr key={row.id} className="border-b border-slate-700/60 last:border-0">
                       <td className="px-3 py-3 sm:px-5">
@@ -221,16 +248,17 @@ export default function PortfolioManagement() {
                         {formatPrice(row.purchasePrice)}
                       </td>
                       <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
-                        {formatPrice(row.currentPrice)}
+                        {row.currentPrice === undefined ? 'Unavailable' : formatPrice(row.currentPrice)}
+                        {row.quoteStatus === 'stale' && <span className="block text-xs text-amber-300">Stale</span>}
                       </td>
                       <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-white sm:table-cell">
-                        {formatPrice(row.value)}
+                        {row.value === undefined ? 'Unavailable' : formatPrice(row.value)}
                       </td>
                       <td
-                        className={`px-3 py-3 sm:px-5 tabular-nums ${isGain ? 'text-emerald-400' : 'text-rose-400'}`}
+                        className={`px-3 py-3 sm:px-5 tabular-nums ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
                       >
-                        <p className="font-semibold">{formatSignedPrice(row.gainLoss)}</p>
-                        <p className="text-xs">{formatPercent(row.gainLossPercent)}</p>
+                        <p className="font-semibold">{row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}</p>
+                        <p className="text-xs">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>
                       </td>
                       <td className="px-3 py-3 sm:px-5 text-center">
                         <IconButton
@@ -253,7 +281,7 @@ export default function PortfolioManagement() {
       {rows.length > 0 && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
-            <CardHeader title="Allocation" subtitle="Share of current portfolio value" />
+            <CardHeader title="Allocation" subtitle="Share of quoted value only; unavailable holdings are excluded" />
             <div className="space-y-3 p-5">
               {allocation.map((row) => (
                 <div key={row.id}>
@@ -282,7 +310,7 @@ export default function PortfolioManagement() {
           </Card>
 
           <Card>
-            <CardHeader title="Top holdings" subtitle="Ranked by current value" />
+            <CardHeader title="Top holdings" subtitle="Ranked among holdings with available quotes" />
             <ul className="space-y-2 p-5">
               {allocation.slice(0, 5).map((row) => (
                 <li
@@ -296,7 +324,7 @@ export default function PortfolioManagement() {
                     </p>
                   </div>
                   <p className="font-semibold tabular-nums text-orange-300">
-                    {formatPrice(row.value)}
+                    {formatPrice(row.value!)}
                   </p>
                 </li>
               ))}

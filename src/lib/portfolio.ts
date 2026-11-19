@@ -1,36 +1,52 @@
 import type { PortfolioHolding } from '@/types';
+import type { QuoteFreshness } from './marketCache';
+
+export interface PortfolioQuote {
+  price: number;
+  freshness: Exclude<QuoteFreshness, 'unavailable'>;
+  updatedAt: number;
+}
 
 export interface PortfolioRow extends PortfolioHolding {
-  currentPrice: number;
+  currentPrice?: number;
+  quoteStatus: QuoteFreshness;
+  quoteUpdatedAt?: number;
   invested: number;
-  value: number;
-  gainLoss: number;
-  gainLossPercent: number;
+  value?: number;
+  gainLoss?: number;
+  gainLossPercent?: number;
 }
 
 export interface PortfolioStats {
   totalInvestment: number;
-  currentValue: number;
-  totalReturn: number;
-  returnPercentage: number;
+  pricedInvestment: number;
+  currentValue?: number;
+  partialValue: number;
+  totalReturn?: number;
+  returnPercentage?: number;
+  pricedHoldings: number;
+  missingHoldings: number;
+  staleHoldings: number;
+  complete: boolean;
 }
 
-/**
- * Values each holding at the latest quote, falling back to the purchase price
- * when a quote is missing so a network hiccup never shows a fake loss.
- */
 export function computeRows(
   holdings: readonly PortfolioHolding[],
-  prices: ReadonlyMap<string, number>
+  quotes: ReadonlyMap<string, PortfolioQuote>
 ): PortfolioRow[] {
   return holdings.map((holding) => {
-    const currentPrice = prices.get(holding.cryptoId) ?? holding.purchasePrice;
+    const quote = quotes.get(holding.cryptoId);
     const invested = holding.quantity * holding.purchasePrice;
-    const value = holding.quantity * currentPrice;
+    if (!quote || !Number.isFinite(quote.price) || quote.price < 0) {
+      return { ...holding, quoteStatus: 'unavailable', invested };
+    }
+    const value = holding.quantity * quote.price;
     const gainLoss = value - invested;
     return {
       ...holding,
-      currentPrice,
+      currentPrice: quote.price,
+      quoteStatus: quote.freshness,
+      quoteUpdatedAt: quote.updatedAt,
       invested,
       value,
       gainLoss,
@@ -41,19 +57,34 @@ export function computeRows(
 
 export function computeStats(rows: readonly PortfolioRow[]): PortfolioStats {
   const totalInvestment = rows.reduce((sum, row) => sum + row.invested, 0);
-  const currentValue = rows.reduce((sum, row) => sum + row.value, 0);
-  const totalReturn = currentValue - totalInvestment;
+  const pricedRows = rows.filter((row) => row.value !== undefined);
+  const pricedInvestment = pricedRows.reduce((sum, row) => sum + row.invested, 0);
+  const partialValue = pricedRows.reduce((sum, row) => sum + row.value!, 0);
+  const complete = pricedRows.length === rows.length;
+  const currentValue = complete ? partialValue : undefined;
+  const totalReturn = complete ? partialValue - totalInvestment : undefined;
   return {
     totalInvestment,
+    pricedInvestment,
     currentValue,
+    partialValue,
     totalReturn,
-    returnPercentage: totalInvestment > 0 ? (totalReturn / totalInvestment) * 100 : 0,
+    returnPercentage: totalReturn !== undefined && totalInvestment > 0
+      ? (totalReturn / totalInvestment) * 100
+      : undefined,
+    pricedHoldings: pricedRows.length,
+    missingHoldings: rows.length - pricedRows.length,
+    staleHoldings: pricedRows.filter((row) => row.quoteStatus === 'stale').length,
+    complete,
   };
 }
 
-/** Holdings sorted by current value, each with its share of the portfolio. */
-export function computeAllocation(rows: readonly PortfolioRow[], currentValue: number) {
+export function computeAllocation(rows: readonly PortfolioRow[], partialValue: number) {
   return [...rows]
-    .sort((a, b) => b.value - a.value)
-    .map((row) => ({ ...row, share: currentValue > 0 ? (row.value / currentValue) * 100 : 0 }));
+    .filter((row) => row.value !== undefined)
+    .sort((first, second) => second.value! - first.value!)
+    .map((row) => ({
+      ...row,
+      share: partialValue > 0 ? (row.value! / partialValue) * 100 : 0,
+    }));
 }

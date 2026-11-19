@@ -1,23 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BarController,
   BarElement,
-  CategoryScale,
   Chart as ChartJS,
   LinearScale,
+  TimeScale,
   Tooltip,
   type ChartOptions,
   type ScriptableContext,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import useSWR from 'swr';
 import { getCryptocurrencyChart } from '@/lib/cryptoApi';
 import { formatPrice } from '@/lib/format';
+import { candleGeometry, candleGranularity, chartTickLabel } from '@/lib/chart';
+import { coinLabel } from '@/lib/coins';
+import { OHLC_REFRESH_MS, type ChartDays } from '@/lib/marketSchemas';
 import { Button } from './ui/Button';
-import type { ChartData } from '@/types';
+import { DataNotice } from './ui/DataNotice';
 
-ChartJS.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
+ChartJS.register(BarController, BarElement, LinearScale, TimeScale, Tooltip);
 
 const TIMEFRAMES = [
   { value: '1', label: '24H' },
@@ -27,7 +31,7 @@ const TIMEFRAMES = [
   { value: '365', label: '1Y' },
 ] as const;
 
-type Timeframe = (typeof TIMEFRAMES)[number]['value'];
+type Timeframe = ChartDays;
 
 interface CandleStickChartProps {
   cryptoId: string;
@@ -38,62 +42,37 @@ const UP = '#34d399';
 const DOWN = '#fb7185';
 
 export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickChartProps) {
-  const [candles, setCandles] = useState<ChartData[]>([]);
   const [selectedDays, setSelectedDays] = useState<Timeframe>(days);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function load() {
-      setLoading(true);
-      try {
-        const data = await getCryptocurrencyChart(cryptoId, selectedDays, 'usd', controller.signal);
-        setCandles(data);
-        setError(null);
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : 'Failed to load chart data');
-        setCandles([]);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
+  const [showData, setShowData] = useState(false);
+  const { data: candles = [], error, isLoading: loading, mutate } = useSWR(
+    ['/api/crypto/ohlc', cryptoId, selectedDays] as const,
+    ([, id, timeframe]) => getCryptocurrencyChart(id, timeframe),
+    {
+      refreshInterval: OHLC_REFRESH_MS,
+      refreshWhenHidden: false,
+      refreshWhenOffline: false,
+      revalidateOnFocus: true,
+      keepPreviousData: true,
+      dedupingInterval: 5_000,
+      errorRetryCount: 4,
     }
-
-    load();
-    return () => controller.abort();
-  }, [cryptoId, selectedDays, reloadKey]);
-
-  const formatLabel = useCallback(
-    (timestamp: number) => {
-      const date = new Date(timestamp);
-      if (selectedDays === '1') {
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-      }
-      if (selectedDays === '365') {
-        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-      }
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    },
-    [selectedDays]
   );
 
-  const labels = candles.map((candle) => formatLabel(candle.timestamp));
   const closes = candles.map((candle) => candle.close);
-
-  // A candlestick body is drawn as a floating bar from open to close,
-  // with a second dataset spanning low to high for the wick.
-  const bodyData = candles.map((candle) => [candle.open, candle.close] as [number, number]);
-  const wickData = candles.map((candle) => [candle.low, candle.high] as [number, number]);
+  const geometry = useMemo(() => candleGeometry(candles), [candles]);
+  const granularity = candleGranularity(selectedDays);
+  const first = candles[0];
+  const last = candles.at(-1);
+  const summary = first && last
+    ? `${coinLabel(cryptoId)}: ${candles.length} ${granularity} from ${new Date(first.timestamp).toLocaleString()} to ${new Date(last.timestamp).toLocaleString()}. Latest close ${formatPrice(last.close)}.`
+    : `${coinLabel(cryptoId)} OHLC chart. ${granularity}.`;
 
   const data = {
-    labels,
     datasets: [
       {
         label: 'Range',
-        data: wickData,
+        data: geometry.wicks,
+        grouped: false,
         backgroundColor: 'transparent',
         borderColor: (ctx: ScriptableContext<'bar'>) => {
           const candle = candles[ctx.dataIndex];
@@ -106,7 +85,8 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
       },
       {
         label: 'Body',
-        data: bodyData,
+        data: geometry.bodies,
+        grouped: false,
         backgroundColor: (ctx: ScriptableContext<'bar'>) => {
           const candle = candles[ctx.dataIndex];
           return candle && candle.close >= candle.open ? UP : DOWN;
@@ -123,7 +103,9 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
   const options: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 250 },
+    animation: typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ? false
+      : { duration: 250 },
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
@@ -135,7 +117,12 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
         bodyColor: '#cbd5e1',
         padding: 10,
         callbacks: {
+          title: (items) => {
+            const candle = candles[items[0]?.dataIndex];
+            return candle ? new Date(candle.timestamp).toLocaleString() : '';
+          },
           label: (item) => {
+            if (item.datasetIndex !== 1) return [];
             const candle = candles[item.dataIndex];
             if (!candle) return '';
             return [
@@ -157,7 +144,15 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
     },
     scales: {
       x: {
-        ticks: { color: '#94a3b8', maxTicksLimit: 8, maxRotation: 0 },
+        type: 'linear',
+        min: first?.timestamp,
+        max: last?.timestamp,
+        ticks: {
+          color: '#94a3b8',
+          maxTicksLimit: 8,
+          maxRotation: 0,
+          callback: (value) => chartTickLabel(Number(value), selectedDays),
+        },
         grid: { display: false },
         border: { color: '#334155' },
       },
@@ -179,9 +174,9 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
     <section className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white">Price Chart</h3>
+          <h3 className="text-lg font-semibold text-white">Price chart</h3>
           <p className="text-sm text-slate-400">
-            {candles.length > 0 ? `${candles.length} candles · ${closes.at(-1) ? formatPrice(closes.at(-1)!) : ''}` : 'OHLC data'}
+            {candles.length > 0 ? `${candles.length} candles · ${formatPrice(closes.at(-1)!)} · ${granularity}` : granularity}
           </p>
         </div>
         <div role="group" aria-label="Chart timeframe" className="flex gap-1 rounded-lg bg-slate-900/60 p-1">
@@ -213,10 +208,10 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
         {!loading && error && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-rose-300">{error}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               CoinGecko&apos;s free tier allows a limited number of requests per minute.
             </p>
-            <Button variant="secondary" size="sm" onClick={() => setReloadKey((key) => key + 1)}>
+            <Button variant="secondary" size="sm" onClick={() => void mutate()}>
               Retry
             </Button>
           </div>
@@ -228,8 +223,37 @@ export default function CandleStickChart({ cryptoId, days = '7' }: CandleStickCh
           </div>
         )}
 
-        {!loading && !error && candles.length > 0 && <Bar data={data} options={options} />}
+        {!loading && !error && candles.length > 0 && (
+          <Bar data={data} options={options} role="img" aria-label={summary} />
+        )}
       </div>
+      {error && candles.length > 0 && <DataNotice message="Showing the last successful chart while refresh fails." onRetry={() => void mutate()} />}
+      {candles.length > 0 && (
+        <>
+          <p className="sr-only">{summary}</p>
+          <Button variant="secondary" size="sm" className="mt-4" aria-expanded={showData} onClick={() => setShowData((open) => !open)}>
+            {showData ? 'Hide chart data' : 'View chart data'}
+          </Button>
+          {showData && (
+            <div className="mt-3 max-h-72 overflow-auto">
+              <table className="w-full text-sm">
+                <caption className="sr-only">{summary}</caption>
+                <thead>
+                  <tr>{['Time', 'Open', 'High', 'Low', 'Close'].map((heading) => <th key={heading} scope="col" className="p-2 text-right text-slate-300 first:text-left">{heading}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {candles.map((candle) => (
+                    <tr key={candle.timestamp}>
+                      <td className="p-2 text-slate-300">{new Date(candle.timestamp).toLocaleString()}</td>
+                      {[candle.open, candle.high, candle.low, candle.close].map((value, index) => <td key={index} className="p-2 text-right tabular-nums text-white">{formatPrice(value)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

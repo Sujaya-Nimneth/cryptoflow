@@ -1,78 +1,54 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { fetchUpstream, resolveProxyRequest, validateProxyPayload } from '@/lib/marketProxy';
 
-const UPSTREAM = process.env.NEXT_PUBLIC_CRYPTO_API_URL || 'https://api.coingecko.com/api/v3';
+const UPSTREAM_TIMEOUT_MS = 8_000;
+const MAX_PAYLOAD_BYTES = 512_000;
 
-/** Cache windows tuned to how often each dataset actually changes. */
-const REVALIDATE = {
-  markets: 30,
-  ohlc: 300,
-  global: 60,
-} as const;
-
-type RouteKind = keyof typeof REVALIDATE;
-
-function classify(pathname: string[]): RouteKind | null {
-  if (pathname[0] === 'coins' && pathname[1] === 'markets') return 'markets';
-  if (pathname[0] === 'coins' && pathname[2] === 'ohlc') return 'ohlc';
-  if (pathname[0] === 'global') return 'global';
-  return null;
-}
-
-function upstreamUrl(kind: RouteKind, pathname: string[], search: string): string {
-  if (kind === 'ohlc') {
-    return `${UPSTREAM}/coins/${encodeURIComponent(pathname[1])}/ohlc?${search}`;
-  }
-  if (kind === 'markets') {
-    return `${UPSTREAM}/coins/markets?${search}`;
-  }
-  return `${UPSTREAM}/global?${search}`;
-}
-
-/**
- * Server-side proxy for CoinGecko.
- *
- * Fetching from the browser both leaks the free-tier rate limit per visitor and
- * fails CORS entirely when CoinGecko answers with an error (the 429/5xx responses
- * carry no Access-Control-Allow-Origin). Routing through the server lets Next.js
- * cache the shared responses and return a consistent error shape.
- */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
-) {
-  const { path } = await params;
-  const kind = classify(path);
-
-  if (!kind) {
-    return NextResponse.json({ error: 'Unsupported path' }, { status: 404 });
+export async function GET(request: NextRequest, context: RouteContext<'/api/crypto/[...path]'>) {
+  const { path } = await context.params;
+  const proxyRequest = resolveProxyRequest(path, new URL(request.url).searchParams);
+  if (!proxyRequest) {
+    return NextResponse.json({ error: 'Unsupported market request' }, { status: 400 });
   }
 
-  const search = new URL(request.url).searchParams.toString();
-  const revalidate = REVALIDATE[kind];
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), UPSTREAM_TIMEOUT_MS);
+  const abort = () => timeout.abort();
+  request.signal.addEventListener('abort', abort, { once: true });
 
   try {
-    const upstream = await fetch(upstreamUrl(kind, path, search), {
-      headers: { accept: 'application/json' },
-      next: { revalidate },
-    });
-
+    const upstream = await fetchUpstream(proxyRequest, timeout.signal);
     if (!upstream.ok) {
       const retryAfter = upstream.headers.get('retry-after');
+      const status = upstream.status === 429 ? 429 : 502;
       return NextResponse.json(
-        { error: `Upstream responded with ${upstream.status}` },
-        {
-          status: upstream.status,
-          headers: retryAfter ? { 'retry-after': retryAfter } : undefined,
-        }
+        { error: upstream.status === 429 ? 'Market data is rate limited' : 'Market data is unavailable' },
+        { status, headers: retryAfter ? { 'retry-after': retryAfter } : undefined }
       );
     }
 
-    return NextResponse.json(await upstream.json(), {
+    const length = Number(upstream.headers.get('content-length') ?? 0);
+    if (length > MAX_PAYLOAD_BYTES) {
+      return NextResponse.json({ error: 'Market response is too large' }, { status: 502 });
+    }
+    const body = await upstream.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_PAYLOAD_BYTES) {
+      return NextResponse.json({ error: 'Market response is too large' }, { status: 502 });
+    }
+    const payload = validateProxyPayload(proxyRequest.kind, JSON.parse(body));
+    return NextResponse.json(payload, {
       headers: {
-        'cache-control': `public, s-maxage=${revalidate}, stale-while-revalidate=${revalidate * 2}`,
+        'cache-control': `public, s-maxage=${proxyRequest.revalidate}, stale-while-revalidate=${proxyRequest.revalidate * 2}`,
       },
     });
   } catch {
-    return NextResponse.json({ error: 'Upstream request failed' }, { status: 502 });
+    const status = timeout.signal.aborted && !request.signal.aborted ? 504 : 502;
+    return NextResponse.json(
+      { error: status === 504 ? 'Market data request timed out' : 'Market data is unavailable' },
+      { status }
+    );
+  } finally {
+    clearTimeout(timer);
+    request.signal.removeEventListener('abort', abort);
   }
 }

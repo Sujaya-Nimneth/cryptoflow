@@ -1,52 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getGlobalMarketData } from '@/lib/cryptoApi';
+import { useGlobalMarket } from '@/hooks/useGlobalMarket';
 import { formatCompactCurrency, formatPercent, trendClass } from '@/lib/format';
-import type { GlobalMarketData } from '@/types';
 import { StatTile } from './ui/StatTile';
+import { DataNotice } from './ui/DataNotice';
 
 export default function MarketOverview() {
-  const [data, setData] = useState<GlobalMarketData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    let cancelled = false;
-
-    const timer = window.setTimeout(async () => {
-      try {
-        const result = await getGlobalMarketData(controller.signal);
-        if (!cancelled) setData(result);
-      } catch (err) {
-        if (!cancelled && !controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : 'Failed to load market data');
-        }
-      }
-    }, 0);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, []);
+  const { data, error, isLoading, mutate } = useGlobalMarket();
 
   if (error) {
     return (
-      <p className="rounded-xl border border-slate-700/70 bg-slate-800/60 p-4 text-sm text-slate-400">
-        Global market data is unavailable right now.
-      </p>
+      <DataNotice message="Global market data is unavailable right now." onRetry={() => void mutate()} />
     );
   }
 
-  const marketCap = data?.total_market_cap?.usd;
-  const volume = data?.total_volume?.usd;
+  const marketCap = data?.total_market_cap.usd;
+  const volume = data?.total_volume.usd;
   const capChange = data?.market_cap_change_percentage_24h_usd;
-  const dominance = data?.market_cap_percentage?.btc;
+  const dominance = data?.market_cap_percentage.btc;
 
   return (
-    <section aria-label="Global market overview" className="space-y-3">
+    <section aria-label="Global market overview" aria-busy={isLoading} className="space-y-3">
       <h2 className="text-2xl font-bold text-white">Market overview</h2>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatTile

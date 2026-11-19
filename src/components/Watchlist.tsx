@@ -12,19 +12,24 @@ import { CoinAvatar } from './ui/CoinAvatar';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
+import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { useLocalUserData } from '@/hooks/useLocalUserData';
+import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
+import { localWatchlistSchema } from '@/lib/userDataSchemas';
 
-const SEED_WATCHLIST: WatchlistEntry[] = [
-  { id: 'w-btc', cryptoId: 'bitcoin' },
-  { id: 'w-eth', cryptoId: 'ethereum' },
-  { id: 'w-ada', cryptoId: 'cardano' },
-];
+const EMPTY_WATCHLIST = { version: 1 as const, entries: [] as WatchlistEntry[] };
 
 export default function Watchlist() {
-  const [entries, setEntries] = useState<WatchlistEntry[]>(SEED_WATCHLIST);
+  const { value: watchlist, status, setValue: setWatchlist, resetInvalid } = useLocalUserData(
+    LOCAL_USER_DATA_KEYS.watchlist,
+    localWatchlistSchema,
+    EMPTY_WATCHLIST
+  );
+  const entries = watchlist.entries;
   const [pendingCoin, setPendingCoin] = useState('');
 
   const ids = useMemo(() => [...new Set(entries.map((entry) => entry.cryptoId))], [entries]);
-  const { coins, loading, error } = useMarketCoins(ids);
+  const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
 
   const availableCoins = useMemo(() => {
     const tracked = new Set(entries.map((entry) => entry.cryptoId));
@@ -39,12 +44,18 @@ export default function Watchlist() {
   function addCoin() {
     const cryptoId = pendingCoin || availableCoins[0]?.id;
     if (!cryptoId) return;
-    setEntries((current) => [...current, { id: `${cryptoId}-${Date.now()}`, cryptoId }]);
+    setWatchlist((current) => ({
+      version: 1,
+      entries: [...current.entries, { id: crypto.randomUUID(), cryptoId }],
+    }));
     setPendingCoin('');
   }
 
   function removeCoin(id: string) {
-    setEntries((current) => current.filter((entry) => entry.id !== id));
+    setWatchlist((current) => ({
+      version: 1,
+      entries: current.entries.filter((entry) => entry.id !== id),
+    }));
   }
 
   return (
@@ -74,23 +85,21 @@ export default function Watchlist() {
               )}
             </Select>
           </Field>
-          <Button onClick={addCoin} disabled={availableCoins.length === 0} className="mb-0.5">
+          <Button onClick={addCoin} disabled={availableCoins.length === 0 || status !== 'ready'} className="mb-0.5">
             <FiStar aria-hidden="true" /> Add
           </Button>
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="rounded-lg border border-rose-500/50 bg-rose-500/10 p-3 text-sm text-rose-200">
-          {error}
-        </p>
-      )}
+      {status === 'invalid' && <div role="alert"><DataNotice message="Saved watchlist data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid watchlist data</Button></div>}
+      {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
+      {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader
             title="My watchlist"
-            subtitle={loading ? 'Syncing live prices…' : `${entries.length} assets tracked`}
+            subtitle={loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           />
           {entries.length === 0 ? (
             <div className="p-5">

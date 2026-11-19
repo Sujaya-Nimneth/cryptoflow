@@ -2,14 +2,14 @@
 
 ## Delivery workflow
 
-Implementation proceeds in small, independently reviewable commits on
-`codex/implementation-plan`. Each phase must pass its relevant checks before the
-branch is opened as a pull request and merged into `main`. Direct pushes to
-`main` are not part of this workflow.
+Implementation proceeds in small, independently reviewable commits on the
+existing `testing-main` branch. Each phase is pushed to `testing-main` after its
+relevant checks pass. The implementation pull request targets `main`; direct
+pushes to `main` are not part of this workflow.
 
-This documentation-only preflight also verifies that the repository accepts an
-attributed commit, branch push, pull request, and ruleset-compliant merge before
-application code is changed.
+The documentation-only preflight in pull request #1 verified that the repository
+accepts an attributed commit, branch push, pull request, and ruleset-compliant
+merge before application code was changed.
 
 ## Phase 1 — Security and build baseline
 
