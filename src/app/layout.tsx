@@ -30,8 +30,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col bg-slate-900 text-slate-100">{children}</body>
+    <html lang="en" className={`${GeistSans.variable} h-full scroll-pt-24 antialiased`}>
+      <body className="flex min-h-full flex-col bg-slate-900 text-slate-100">
+        <a href="#main-content" className="skip-link">Skip to main content</a>
+        {children}
+      </body>
     </html>
   );
 }

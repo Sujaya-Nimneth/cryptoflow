@@ -10,6 +10,38 @@ test('loads the dashboard shell and every section', async ({ page }) => {
   }
 });
 
+test('supports keyboard tabs, visible mobile labels, and a skip link', async ({ page }) => {
+  await page.goto('/');
+  await page.keyboard.press('Tab');
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+  await expect(skipLink).toBeFocused();
+  await skipLink.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+
+  const dashboard = page.getByRole('tab', { name: 'Dashboard' });
+  await dashboard.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page).toHaveURL(/tab=portfolio/);
+  await expect(page.getByRole('tab', { name: 'Portfolio' })).toBeFocused();
+  await expect(page.getByRole('tab', { name: 'Portfolio' })).toHaveAttribute('tabindex', '0');
+  await page.keyboard.press('End');
+  await expect(page).toHaveURL(/tab=alerts/);
+  await expect(page.getByRole('tab', { name: 'Alerts' })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeFocused();
+
+  for (const section of ['Dashboard', 'Portfolio', 'Watchlist', 'Alerts']) {
+    const tab = page.getByRole('tab', { name: section });
+    await expect(tab).toBeVisible();
+    const box = await tab.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    const panelId = await tab.getAttribute('aria-controls');
+    await expect(page.locator(`#${panelId}`)).toHaveCount(1);
+  }
+});
+
 test('has no horizontal page overflow', async ({ page }) => {
   await page.goto('/');
   const overflow = await page.evaluate(

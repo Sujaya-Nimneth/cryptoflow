@@ -13,7 +13,7 @@ export default async function AuthPage({ searchParams }: PageProps<'/auth'>) {
   if (await getVerifiedIdentity()) redirect(next);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-4 py-10">
+    <main id="main-content" tabIndex={-1} className="mx-auto flex min-h-screen max-w-3xl flex-col justify-center gap-6 px-4 py-10 focus:outline-none">
       <div>
         <Link href={next} className="text-sm text-slate-300 underline underline-offset-4">Back to CryptoFlow</Link>
         <h1 className="mt-5 text-3xl font-semibold text-white">Your data, your choice.</h1>

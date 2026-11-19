@@ -25,11 +25,11 @@ export default async function Home({ searchParams }: PageProps<'/'>) {
   return (
     <UserDataProvider mode={mode} cloudConfigured={cloudConfigured} identity={identity}>
     <div className="min-h-screen bg-slate-900">
-      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900/85 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4 py-4">
+          <div className="flex items-center justify-between gap-4 py-3 sm:py-4">
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-white sm:text-2xl">
+              <h1 translate="no" className="truncate text-lg font-bold text-white sm:text-2xl">
                 CryptoFlow Analytics
               </h1>
               <p className="hidden text-sm text-slate-400 sm:block">
@@ -43,7 +43,7 @@ export default async function Home({ searchParams }: PageProps<'/'>) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-7xl scroll-mt-24 px-4 py-5 focus:outline-none sm:px-6 sm:py-8 lg:px-8">
         <Suspense fallback={tabSkeleton}>
           <DashboardShell />
         </Suspense>
