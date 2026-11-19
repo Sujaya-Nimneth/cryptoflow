@@ -41,12 +41,12 @@ jobs:
       - name: Start local Supabase
         run: npm run db:start
 
-      - name: Publish local Supabase configuration
+      - name: Publish unquoted local Supabase configuration
         run: |
           npm run supabase -- status -o env \
             --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
             --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
-            | sed -n '/^NEXT_PUBLIC_SUPABASE_\(URL\|PUBLISHABLE_KEY\)=/p' >> "$GITHUB_ENV"
+            | sed -nE '/^NEXT_PUBLIC_SUPABASE_(URL|PUBLISHABLE_KEY)=/ { s/^([^=]+)="(.*)"$/\1=\2/; p; }' >> "$GITHUB_ENV"
 
       - name: Test database policies
         run: npm run db:test
