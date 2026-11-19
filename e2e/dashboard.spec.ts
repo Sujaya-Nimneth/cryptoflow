@@ -308,3 +308,97 @@ test('keeps watchlist prices and changes together without sideways scrolling', a
   expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
+test('reports market rate limits and recovers after a retry', async ({ page }) => {
+  let marketRequests = 0;
+  await page.unroute('**/api/crypto/coins/markets?**');
+  await page.route('**/api/crypto/coins/markets?**', async (route) => {
+    marketRequests += 1;
+    if (marketRequests === 1) {
+      await route.fulfill({
+        status: 429,
+        headers: { 'retry-after': '30' },
+        json: { error: 'Market data is rate limited' },
+      });
+      return;
+    }
+    const ids = new URL(route.request().url()).searchParams.get('ids')?.split(',') ?? [];
+    const quotes = ids.map((id) => ({
+      id,
+      name: id,
+      symbol: id,
+      current_price: 100,
+      market_cap: 1_000_000,
+      market_cap_rank: 1,
+      total_volume: 100_000,
+      high_24h: 110,
+      low_24h: 90,
+      price_change_percentage_24h: 1,
+      circulating_supply: 1_000,
+      image: 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png',
+    }));
+    await route.fulfill({ json: quotes });
+  });
+  await page.goto('/');
+  await expect(page.getByText('Market data is rate limited. Try again in 30s.')).toBeVisible();
+  await page.getByRole('button', { name: 'Retry' }).first().click();
+  await expect(page.getByRole('region', { name: 'Live price tracking' }).getByText('$100.00').first()).toBeVisible();
+  expect(marketRequests).toBeGreaterThanOrEqual(2);
+});
+
+test('keeps the dashboard usable when browser storage is blocked', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() { throw new DOMException('Storage is blocked', 'SecurityError'); },
+    });
+  });
+  await page.goto('/?tab=portfolio');
+  await expect(page.getByText('Browser storage is unavailable. Changes cannot be saved on this device.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add asset' }).first()).toBeDisabled();
+  await page.getByRole('tab', { name: 'Watchlist' }).click();
+  await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+});
+
+test('closes an expired undo notice when the page becomes hidden', async ({ page }) => {
+  await page.goto('/?tab=watchlist');
+  await page.getByLabel('Add coin').selectOption('bitcoin');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove Bitcoin from watchlist' }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeVisible();
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Bitcoin BTC' })).toHaveCount(0);
+});
+
+test('does not duplicate a watchlist coin re-added before Undo completes', async ({ page }) => {
+  await page.goto('/?tab=watchlist');
+  await page.getByLabel('Add coin').selectOption('bitcoin');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove Bitcoin from watchlist' }).click();
+  const undo = page.getByRole('button', { name: 'Undo', exact: true });
+  await expect(undo).toBeVisible();
+  await page.evaluate(() => {
+    localStorage.setItem('cryptoflow:local:watchlist', JSON.stringify({
+      version: 1,
+      entries: [{ id: '00000000-0000-4000-8000-000000000002', cryptoId: 'bitcoin' }],
+    }));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'cryptoflow:local:watchlist' }));
+  });
+  await undo.click();
+  await expect(undo).toHaveCount(0);
+  await expect(page.getByRole('row', { name: /Bitcoin BTC/ })).toHaveCount(1);
+});
+
+test('preserves corrupt device data until reset is confirmed by the user', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('cryptoflow:local:portfolio', '{broken'));
+  await page.goto('/?tab=portfolio');
+  await expect(page.getByText('Saved portfolio data is invalid and was not overwritten.')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('cryptoflow:local:portfolio'))).toBe('{broken');
+  await page.getByRole('button', { name: 'Reset invalid portfolio data' }).click();
+  await expect(page.getByText('No assets yet')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('cryptoflow:local:portfolio'))).toBe('{"version":1,"holdings":[]}');
+});
+
