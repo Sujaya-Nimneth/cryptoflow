@@ -7,7 +7,7 @@ const publishableKey = process.env.E2E_SUPABASE_PUBLISHABLE_KEY;
 test.describe('authenticated cloud storage', () => {
   test.skip(!supabaseUrl || !publishableKey, 'Local Supabase credentials are not configured');
 
-  test('keeps cloud data isolated and preserves device-local data', async ({ page, browser }) => {
+  test('keeps cloud data isolated and preserves device-local data', async ({ page, authenticatedPage }) => {
     const email = `cryptoflow-${randomUUID()}@example.test`;
     const password = `Cloud-${randomUUID()}-123`;
     const mobile = test.info().project.name === 'mobile';
@@ -47,8 +47,7 @@ test.describe('authenticated cloud storage', () => {
     await page.reload();
     await expect(page.getByRole('cell', { name: '0.75' })).toBeVisible();
 
-    const secondContext = await browser.newContext();
-    const secondPage = await secondContext.newPage();
+    const secondPage = authenticatedPage;
     const secondEmail = `cryptoflow-${randomUUID()}@example.test`;
     await secondPage.goto('http://127.0.0.1:3000/auth');
     const secondSwitch = secondPage.getByRole('button', { name: 'Create an account' });
@@ -61,8 +60,6 @@ test.describe('authenticated cloud storage', () => {
     await expect(secondPage).toHaveURL(/\/$/);
     await secondPage.goto('/?tab=portfolio');
     await expect(secondPage.getByText('No assets yet')).toBeVisible();
-    await secondContext.close();
-
     const signOutButton = page.getByRole('button', { name: 'Sign out' });
     if (mobile) await signOutButton.scrollIntoViewIfNeeded();
     await signOutButton.click();

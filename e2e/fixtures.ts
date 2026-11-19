@@ -21,7 +21,7 @@ const coins = [
   image: 'https://coin-images.coingecko.com/coins/images/1/large/bitcoin.png',
 }));
 
-async function mockMarkets(page: Page) {
+export async function mockMarkets(page: Page) {
   await page.route('**/api/crypto/coins/markets?**', async (route) => {
     const ids = new URL(route.request().url()).searchParams.get('ids')?.split(',') ?? [];
     await route.fulfill({ json: coins.filter((coin) => ids.includes(String(coin.id))) });
@@ -51,10 +51,20 @@ async function mockMarkets(page: Page) {
   }));
 }
 
-export const test = base.extend({
+export const test = base.extend<{ authenticatedPage: Page }>({
   page: async ({ page }, provideFixture) => {
     await mockMarkets(page);
     await provideFixture(page);
+  },
+  authenticatedPage: async ({ browser }, provideFixture: (page: Page) => Promise<void>) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await mockMarkets(page);
+    try {
+      await provideFixture(page);
+    } finally {
+      await context.close();
+    }
   },
 });
 
