@@ -6,16 +6,13 @@ import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatPrice } from '@/lib/format';
 import { isAlertTriggered } from '@/lib/alerts';
-import type { PriceAlert } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
-import { useLocalUserData } from '@/hooks/useLocalUserData';
-import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
-import { localAlertsSchema } from '@/lib/userDataSchemas';
+import { useAlertsData } from '@/hooks/useAlertsData';
 
 interface DraftAlert {
   cryptoId: string;
@@ -24,15 +21,9 @@ interface DraftAlert {
 }
 
 const EMPTY_DRAFT: DraftAlert = { cryptoId: 'bitcoin', direction: 'above', targetPrice: '' };
-const EMPTY_ALERTS = { version: 1 as const, alerts: [] as PriceAlert[] };
 
 export default function MarketAlerts() {
-  const { value: alertStore, status, setValue: setAlertStore, resetInvalid } = useLocalUserData(
-    LOCAL_USER_DATA_KEYS.alerts,
-    localAlertsSchema,
-    EMPTY_ALERTS
-  );
-  const alerts = alertStore.alerts;
+  const { alerts, status, pending, error: storageError, addAlert, deleteAlert, resetInvalid } = useAlertsData();
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
@@ -55,7 +46,7 @@ export default function MarketAlerts() {
 
   const triggeredCount = evaluated.filter((alert) => alert.triggered).length;
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const targetPrice = Number(draft.targetPrice);
 
@@ -64,27 +55,21 @@ export default function MarketAlerts() {
       return;
     }
 
-    const saved = setAlertStore((current) => ({
-      version: 1,
-      alerts: [{
-        id: crypto.randomUUID(),
-        cryptoId: draft.cryptoId,
-        direction: draft.direction,
-        targetPrice,
-        createdAt: new Date().toISOString(),
-      }, ...current.alerts],
-    }));
+    const saved = await addAlert({
+      id: crypto.randomUUID(),
+      cryptoId: draft.cryptoId,
+      direction: draft.direction,
+      targetPrice,
+      createdAt: new Date().toISOString(),
+    });
     if (!saved) return;
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setShowForm(false);
   }
 
-  function deleteAlert(id: string) {
-    setAlertStore((current) => ({
-      version: 1,
-      alerts: current.alerts.filter((alert) => alert.id !== id),
-    }));
+  async function handleDelete(id: string) {
+    await deleteAlert(id);
   }
 
   return (
@@ -99,13 +84,14 @@ export default function MarketAlerts() {
           </p>
           {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready'}>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready' || pending}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
 
       {status === 'invalid' && <div role="alert"><DataNotice message="Saved alert data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid alert data</Button></div>}
       {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
+      {storageError && <DataNotice message={storageError} />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       {showForm && (
@@ -171,7 +157,7 @@ export default function MarketAlerts() {
               <Button variant="secondary" onClick={() => setShowForm(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Create alert</Button>
+              <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Create alert'}</Button>
             </div>
           </form>
         </Card>
@@ -192,7 +178,7 @@ export default function MarketAlerts() {
           icon={<FiBell size={24} />}
           title="No alerts yet"
           description="Create an alert to be notified when a coin crosses your target price."
-          action={<Button onClick={() => setShowForm(true)}>Create alert</Button>}
+          action={<Button onClick={() => setShowForm(true)} disabled={status !== 'ready' || pending}>Create alert</Button>}
         />
       ) : (
         <ul className="space-y-3">
@@ -248,7 +234,8 @@ export default function MarketAlerts() {
                 <IconButton
                   label={`Delete ${coinLabel(alert.cryptoId)} alert`}
                   variant="danger"
-                  onClick={() => deleteAlert(alert.id)}
+                  disabled={pending}
+                  onClick={() => handleDelete(alert.id)}
                 >
                   <FiTrash2 size={16} aria-hidden="true" />
                 </IconButton>

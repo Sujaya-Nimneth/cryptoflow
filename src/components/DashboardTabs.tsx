@@ -5,10 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 import { FiBell, FiBookmark, FiBriefcase, FiHome } from 'react-icons/fi';
 import { cx } from './ui/Card';
+import { useUserDataContext } from './UserDataProvider';
 
 export type TabId = 'dashboard' | 'portfolio' | 'watchlist' | 'alerts';
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
+export const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <FiHome aria-hidden="true" /> },
   { id: 'portfolio', label: 'Portfolio', icon: <FiBriefcase aria-hidden="true" /> },
   { id: 'watchlist', label: 'Watchlist', icon: <FiBookmark aria-hidden="true" /> },
@@ -42,6 +43,7 @@ export default function DashboardTabs() {
   const searchParams = useSearchParams();
   const requested = searchParams.get('tab');
   const activeTab: TabId = isTabId(requested) ? requested : 'dashboard';
+  const { mode } = useUserDataContext();
 
   const selectTab = useCallback(
     (tab: TabId) => {
@@ -56,6 +58,11 @@ export default function DashboardTabs() {
 
   return (
     <div className="space-y-8">
+      {mode === 'cloud' && (
+        <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+          Cloud account · Portfolio, watchlist, and alerts are saved privately to your account.
+        </p>
+      )}
       <nav aria-label="Dashboard sections">
         <div
           role="tablist"
