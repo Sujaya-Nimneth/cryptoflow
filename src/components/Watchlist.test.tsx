@@ -78,4 +78,17 @@ describe('recoverable watchlist deletion', () => {
     expect(screen.queryByRole('button', { name: /^Undo$/ })).not.toBeInTheDocument();
     expect(collection.addEntry).not.toHaveBeenCalled();
   });
+
+  it('does not restore a duplicate after the same coin is re-added elsewhere', async () => {
+    collection.deleteEntry.mockResolvedValue(true);
+    collection.addEntry.mockResolvedValue(true);
+    const { rerender } = render(<Watchlist />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Bitcoin from watchlist' }));
+    await screen.findByRole('button', { name: /^Undo$/ });
+    collection.entries = [{ id: '00000000-0000-4000-8000-000000000002', cryptoId: 'bitcoin' }];
+    rerender(<Watchlist />);
+    fireEvent.click(screen.getByRole('button', { name: /^Undo$/ }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Undo$/ })).not.toBeInTheDocument());
+    expect(collection.addEntry).not.toHaveBeenCalled();
+  });
 });

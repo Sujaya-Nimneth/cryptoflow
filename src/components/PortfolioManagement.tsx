@@ -117,7 +117,7 @@ export default function PortfolioManagement() {
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending || undoDelete.deleted !== null}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
@@ -136,66 +136,68 @@ export default function PortfolioManagement() {
         {showForm && (
         <Card>
           <CardHeader title="Add an asset" subtitle="Record a purchase to track its performance." />
-          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Coin" htmlFor="asset-coin">
-                <Select
-                  id="asset-coin"
-                  name="cryptoId"
-                  autoComplete="off"
-                  required
-                  value={draft.cryptoId}
-                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
-                >
-                  {COINS.map((coin) => (
-                    <option key={coin.id} value={coin.id}>
-                      {coin.name} ({coin.symbol})
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+          <form ref={formRef} onSubmit={handleSubmit} noValidate aria-busy={pending} className="space-y-4 p-5">
+            <fieldset disabled={pending} className="min-w-0 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Coin" htmlFor="asset-coin">
+                  <Select
+                    id="asset-coin"
+                    name="cryptoId"
+                    autoComplete="off"
+                    required
+                    value={draft.cryptoId}
+                    onChange={(event) => updateDraft('cryptoId', event.target.value)}
+                  >
+                    {COINS.map((coin) => (
+                      <option key={coin.id} value={coin.id}>
+                        {coin.name} ({coin.symbol})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-              <Field label="Quantity" htmlFor="asset-quantity" error={errors.quantity}>
-                <Input
-                  id="asset-quantity"
-                  name="quantity"
-                  type="number"
-                  min="0"
-                  max={MAX_POSITIVE_AMOUNT}
-                  step="any"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  required
-                  placeholder="0.5"
-                  value={draft.quantity}
-                  onChange={(event) => updateDraft('quantity', event.target.value)}
-                />
-              </Field>
+                <Field label="Quantity" htmlFor="asset-quantity" error={errors.quantity}>
+                  <Input
+                    id="asset-quantity"
+                    name="quantity"
+                    type="number"
+                    min="0"
+                    max={MAX_POSITIVE_AMOUNT}
+                    step="any"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    required
+                    placeholder="0.5"
+                    value={draft.quantity}
+                    onChange={(event) => updateDraft('quantity', event.target.value)}
+                  />
+                </Field>
 
-              <Field label="Purchase price (USD)" htmlFor="asset-price" error={errors.purchasePrice}>
-                <Input
-                  id="asset-price"
-                  name="purchasePrice"
-                  type="number"
-                  min="0"
-                  max={MAX_POSITIVE_AMOUNT}
-                  step="any"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  required
-                  placeholder="40000"
-                  value={draft.purchasePrice}
-                  onChange={(event) => updateDraft('purchasePrice', event.target.value)}
-                />
-              </Field>
-            </div>
+                <Field label="Purchase price (USD)" htmlFor="asset-price" error={errors.purchasePrice}>
+                  <Input
+                    id="asset-price"
+                    name="purchasePrice"
+                    type="number"
+                    min="0"
+                    max={MAX_POSITIVE_AMOUNT}
+                    step="any"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    required
+                    placeholder="40000"
+                    value={draft.purchasePrice}
+                    onChange={(event) => updateDraft('purchasePrice', event.target.value)}
+                  />
+                </Field>
+              </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={closeForm}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save asset'}</Button>
-            </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={closeForm} disabled={pending}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save asset'}</Button>
+              </div>
+            </fieldset>
           </form>
         </Card>
         )}
@@ -225,7 +227,7 @@ export default function PortfolioManagement() {
           <EmptyState
             title="No assets yet"
             description="Add your first purchase to start tracking performance."
-            action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending}>Add asset</Button>}
+            action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="asset-form" disabled={status !== 'ready' || pending || undoDelete.deleted !== null}>Add asset</Button>}
           />
         ) : (
           <div className="overflow-x-auto">

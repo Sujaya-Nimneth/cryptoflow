@@ -65,6 +65,32 @@ export function validateProxyPayload(kind: ProxyRequest['kind'], payload: unknow
   return globalResponseSchema.parse(payload);
 }
 
+export async function readBoundedText(
+  response: Pick<Response, 'body'>,
+  maxBytes: number
+): Promise<string | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return '';
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  let text = '';
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export function upstreamOrigin(value = process.env.CRYPTO_API_URL): string {
   if (!value) return 'https://api.coingecko.com/api/v3';
   const url = new URL(value);

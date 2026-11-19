@@ -5,7 +5,7 @@ import { FiStar, FiTrash2 } from 'react-icons/fi';
 import { useMarketCoins } from '@/hooks/useMarketCoins';
 import { COINS, coinLabel, coinSymbol } from '@/lib/coins';
 import { formatCompactCurrency, formatPercent, formatPrice, trendClass } from '@/lib/format';
-import type { Cryptocurrency } from '@/types';
+import type { Cryptocurrency, WatchlistEntry } from '@/types';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { CoinAvatar } from './ui/CoinAvatar';
@@ -20,10 +20,16 @@ import { UndoNotice } from './ui/UndoNotice';
 export default function Watchlist() {
   const { entries, status, pending, error: storageError, addEntry, deleteEntry, resetInvalid } = useWatchlistData();
   const [pendingCoin, setPendingCoin] = useState('');
-  const undoDelete = useUndoDelete({
+  const undoDelete = useUndoDelete<WatchlistEntry>({
     items: entries,
     remove: deleteEntry,
-    restore: addEntry,
+    restore: (entry) => {
+      if (entries.some((current) => current.id !== entry.id && current.cryptoId === entry.cryptoId)) {
+        undoDelete.dismiss();
+        return Promise.resolve(true);
+      }
+      return addEntry(entry);
+    },
     describe: (entry) => `${coinLabel(entry.cryptoId)} from your watchlist`,
   });
 
@@ -68,7 +74,7 @@ export default function Watchlist() {
               id="watchlist-coin"
               value={pendingCoin || availableCoins[0]?.id || ''}
               onChange={(event) => setPendingCoin(event.target.value)}
-              disabled={availableCoins.length === 0}
+              disabled={availableCoins.length === 0 || pending || undoDelete.deleted !== null}
               className="min-w-44"
             >
               {availableCoins.length === 0 ? (
@@ -82,7 +88,7 @@ export default function Watchlist() {
               )}
             </Select>
           </Field>
-          <Button onClick={addCoin} disabled={availableCoins.length === 0 || status !== 'ready' || pending} className="mb-0.5">
+          <Button onClick={addCoin} disabled={availableCoins.length === 0 || status !== 'ready' || pending || undoDelete.deleted !== null} className="mb-0.5">
             <FiStar aria-hidden="true" /> Add
           </Button>
         </div>

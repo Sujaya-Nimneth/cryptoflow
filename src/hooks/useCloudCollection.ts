@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import type { z } from 'zod';
 import { getSupabaseBrowserClient } from '@/lib/supabase/client';
@@ -42,38 +42,76 @@ export function useCloudCollection<TItem extends { id: string }, TState>({
   );
   const [pending, setPending] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [mutationOwner, setMutationOwner] = useState<string | null>(userId);
+  const activeMutations = useRef(0);
+  const mutationGeneration = useRef(0);
+
+  if (mutationOwner !== userId) {
+    setMutationOwner(userId);
+    setPending(false);
+    setMutationError(null);
+  }
+
+  useEffect(() => {
+    mutationGeneration.current += 1;
+    activeMutations.current = 0;
+  }, [client, userId]);
+
+  const beginMutation = useCallback(() => {
+    activeMutations.current += 1;
+    setPending(true);
+    setMutationError(null);
+    return mutationGeneration.current;
+  }, []);
+
+  const finishMutation = useCallback((generation: number) => {
+    activeMutations.current = Math.max(0, activeMutations.current - 1);
+    if (generation === mutationGeneration.current) {
+      setPending(activeMutations.current > 0);
+    }
+  }, []);
+
+  const reportMutationError = useCallback((generation: number, cause: unknown, fallback: string) => {
+    if (generation === mutationGeneration.current) {
+      setMutationError(cause instanceof Error ? cause.message : fallback);
+    }
+  }, []);
+
+  const refreshAfterMutation = useCallback(async () => {
+    await mutate(undefined, { throwOnError: true });
+  }, [mutate]);
 
   const add = useCallback(async (item: TItem) => {
     if (!client || !userId) return false;
-    setPending(true);
-    setMutationError(null);
+    const generation = beginMutation();
     try {
       await insert(client, item);
-      await mutate();
+      await refreshAfterMutation();
+      if (generation !== mutationGeneration.current) return false;
       return true;
     } catch (cause) {
-      setMutationError(cause instanceof Error ? cause.message : 'Could not save cloud data.');
+      reportMutationError(generation, cause, 'Could not save cloud data.');
       return false;
     } finally {
-      setPending(false);
+      finishMutation(generation);
     }
-  }, [client, insert, mutate, userId]);
+  }, [beginMutation, client, finishMutation, insert, refreshAfterMutation, reportMutationError, userId]);
 
   const deleteItem = useCallback(async (id: string) => {
     if (!client || !userId) return false;
-    setPending(true);
-    setMutationError(null);
+    const generation = beginMutation();
     try {
       await remove(client, userId, id);
-      await mutate();
+      await refreshAfterMutation();
+      if (generation !== mutationGeneration.current) return false;
       return true;
     } catch (cause) {
-      setMutationError(cause instanceof Error ? cause.message : 'Could not update cloud data.');
+      reportMutationError(generation, cause, 'Could not update cloud data.');
       return false;
     } finally {
-      setPending(false);
+      finishMutation(generation);
     }
-  }, [client, mutate, remove, userId]);
+  }, [beginMutation, client, finishMutation, refreshAfterMutation, remove, reportMutationError, userId]);
 
   const status: LocalDataStatus = isLoading ? 'loading' : error ? 'unavailable' : 'ready';
   return {

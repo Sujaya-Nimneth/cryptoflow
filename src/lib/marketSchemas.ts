@@ -7,6 +7,12 @@ export const GLOBAL_REFRESH_MS = 60_000;
 export const QUOTE_STALE_MS = 90_000;
 export const CHART_DAYS = ['1', '7', '30', '90', '365'] as const;
 
+export function retryAfterSeconds(value: string | null): number | null {
+  if (!value || !/^\d{1,6}$/.test(value)) return null;
+  const seconds = Number(value);
+  return seconds <= 86_400 ? seconds : null;
+}
+
 const coinId = z.enum(COINS.map((coin) => coin.id) as [string, ...string[]]);
 const coinIds = z.string().transform((value) => value.split(',')).pipe(
   z.array(coinId).min(1).max(COINS.length).refine(

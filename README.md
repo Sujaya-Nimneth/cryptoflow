@@ -1,278 +1,210 @@
 # CryptoFlow Analytics
 
-A professional-grade, real-time cryptocurrency analytics dashboard built with Next.js, TypeScript, Tailwind CSS, and Chart.js. Features live price tracking, portfolio management, interactive candlestick charts, intelligent market alerts, and watchlist functionality.
+CryptoFlow is a responsive cryptocurrency dashboard built with Next.js,
+TypeScript, Tailwind CSS, Chart.js, and optional Supabase cloud storage.
+It combines live USD market data with portfolio tracking, a watchlist,
+candlestick charts, and on-screen price alerts.
 
-## 🚀 Features
+## Implemented Features
 
-- **Live Price Tracking**: Real-time cryptocurrency price updates with 24-hour change indicators
-- **Portfolio Management**: Track your crypto investments with detailed performance analytics
-- **Interactive Charts**: OHLC candlestick charts with five timeframes and a coin picker
-- **Market Alerts**: Set intelligent price alerts for cryptocurrencies with email and push notifications
-- **Watchlist**: Create custom watchlists to monitor your favorite cryptocurrencies
-- **Market Overview**: View global market cap, trading volume, and Bitcoin dominance metrics
-- **Modern UI**: Dark-themed, responsive interface optimized for all devices
+- Five live price cards, global market statistics, and OHLC charts for a curated
+  catalog of 18 coins.
+- Portfolio cost basis, quoted value, and gain/loss calculations. Missing quotes
+  are labeled unavailable; partial totals are never presented as complete values.
+- A watchlist with quote coverage and highest-priced tracked coins.
+- Above/below price targets evaluated while the dashboard is open.
+- Keyboard-operable tabs, linked form errors, focus restoration, and Undo for
+  deleted holdings, watchlist entries, and alerts.
+- Versioned device-local persistence, with optional owner-isolated cloud storage.
 
-## 🛠️ Tech Stack
+Alerts do **not** send email, push notifications, or SMS, and do not run in the
+background. Closing the dashboard stops checks. Market values are informational,
+not financial advice.
 
-- **Frontend**: Next.js 16 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Charts**: Chart.js with react-chartjs-2
-- **Icons**: React Icons
-- **State Management**: React Hooks
-- **Backend**: REST API (CoinGecko)
-- **Database**: Supabase (PostgreSQL)
+## Requirements
 
-## 📋 Prerequisites
-
-- Node.js 18+ 
-- npm or yarn
-- Supabase account (for database features)
-
-## 🚀 Getting Started
-
-### 1. Install Dependencies
+- Node.js **22.12.0 or newer within the supported Node 22 runtime**. The repository
+  pins 22.12.0 in `.nvmrc`.
+- npm; use `npm ci` for a reproducible installation.
+- Docker Desktop or another compatible Docker runtime, only for local Supabase
+  development and database tests.
 
 ```bash
-npm install
+nvm use
+npm ci
 ```
 
-### 2. Configure Environment Variables
+## Run Without Cloud Storage
 
-Copy `.env.example` to `.env.local`. Every variable is optional — without Supabase
-credentials the app runs fully client-side and skips persistence.
-
-```env
-NEXT_PUBLIC_CRYPTO_API_URL=https://api.coingecko.com/api/v3
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
-
-### 3. Set Up Supabase Database (Optional)
-
-Create the following tables in your Supabase database:
-
-#### `portfolio_assets`
-```sql
-CREATE TABLE portfolio_assets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  crypto_id TEXT NOT NULL,
-  quantity DECIMAL NOT NULL,
-  purchase_price DECIMAL NOT NULL,
-  purchase_date TIMESTAMP DEFAULT now(),
-  created_at TIMESTAMP DEFAULT now()
-);
-```
-
-#### `watchlist`
-```sql
-CREATE TABLE watchlist (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  crypto_id TEXT NOT NULL,
-  added_date TIMESTAMP DEFAULT now()
-);
-```
-
-#### `market_alerts`
-```sql
-CREATE TABLE market_alerts (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL,
-  crypto_id TEXT NOT NULL,
-  alert_type TEXT NOT NULL,
-  target_price DECIMAL NOT NULL,
-  is_triggered BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT now()
-);
-```
-
-### 4. Run the Development Server
+No environment variables are required for device-local mode:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). Holdings, watchlist entries,
+and alerts are stored in this browser under versioned `cryptoflow:local:*` keys.
+They are not synchronized between devices. Invalid saved data is preserved until
+the user explicitly chooses the reset action. If browser storage is blocked or
+full, the dashboard reports that changes cannot be saved.
 
-## 📁 Project Structure
+## Optional Local Supabase
 
-```
-src/
-├── app/
-│   ├── layout.tsx         # Root layout, metadata and viewport
-│   ├── page.tsx           # Server shell with header/footer
-│   ├── loading.tsx        # Route-level loading skeleton
-│   ├── error.tsx          # Route-level error boundary
-│   ├── not-found.tsx      # 404 page
-│   └── globals.css        # Tailwind theme and global styles
-├── components/
-│   ├── DashboardTabs.tsx        # URL-driven tab navigation, lazy panels
-│   ├── DashboardPanel.tsx       # Prices, market overview and chart
-│   ├── LivePriceTracker.tsx     # Auto-refreshing price grid
-│   ├── PriceCard.tsx            # Individual price card
-│   ├── CandleStickChart.tsx     # OHLC candlestick chart
-│   ├── MarketOverview.tsx       # Global market statistics
-│   ├── PortfolioManagement.tsx  # Portfolio tracking and analytics
-│   ├── Watchlist.tsx            # Watchlist with live prices
-│   ├── MarketAlerts.tsx         # Price alert management
-│   ├── LastUpdated.tsx          # Mount-safe local clock
-│   └── ui/                      # Card, Button, Field, StatTile, …
-├── hooks/
-│   └── useMarketCoins.ts  # Shared live quote loader
-├── lib/
-│   ├── cryptoApi.ts       # CoinGecko client (native fetch)
-│   ├── coins.ts           # Supported coin catalog
-│   ├── format.ts          # Shared Intl formatters
-│   ├── portfolio.ts       # Portfolio math (unit tested)
-│   ├── alerts.ts          # Alert evaluation (unit tested)
-│   └── supabase.ts        # Optional Supabase persistence
-├── types/
-│   └── index.ts           # TypeScript interfaces
-└── .env.local             # Environment variables (see .env.example)
-```
-
-## 🎨 Features in Detail
-
-### Dashboard Tab
-- Live cryptocurrency price tracking with auto-refresh every 30 seconds
-- Global market statistics (market cap, 24h volume, Bitcoin dominance)
-- Responsive grid layout for multiple cryptocurrencies
-
-### Portfolio Tab
-- Add and manage your cryptocurrency holdings
-- Real-time portfolio value calculation
-- Individual asset performance tracking (gain/loss percentage)
-- Portfolio allocation breakdown chart
-- Top holdings summary
-
-### Watchlist Tab
-- Create custom watchlists of cryptocurrencies
-- View 24-hour price changes and market caps
-- Top gainers section for market trends
-- Quick add/remove functionality
-
-### Alerts Tab
-- Create price-based alerts (above/below target price)
-- Visual alert status indicators
-- Notification preferences (email, push, SMS)
-- Triggered alert highlighting
-
-## 🔌 API Integration
-
-### CoinGecko API
-- Get market data for 250+ cryptocurrencies
-- OHLC (Open, High, Low, Close) candlestick data
-- Trending cryptocurrencies
-- No authentication required
-
-### Supabase
-- User portfolio persistence
-- Watchlist management
-- Alert storage and tracking
-
-## 📊 Data Flow
-
-1. **Price Updates**: CoinGecko API → Component State → UI
-2. **User Data**: Form Input → Supabase → Component State → UI
-3. **Analytics**: Portfolio Assets → Calculate Stats → Display Charts
-
-## 🎯 Customization
-
-### Add More Cryptocurrencies
-Edit the default list in `LivePriceTracker.tsx`:
-```typescript
-const data = await getCryptocurrencies(['bitcoin', 'ethereum', 'cardano', ...]);
-```
-
-### Change Update Frequency
-Modify the interval in `LivePriceTracker.tsx`:
-```typescript
-const interval = setInterval(fetchPrices, 30000); // 30 seconds
-```
-
-### Customize Colors
-Theme tokens live in the `@theme` block of `src/app/globals.css` (Tailwind CSS v4 has no
-`tailwind.config.ts`). Component-level colors use standard Tailwind utilities.
-
-## 🚀 Deployment
-
-### Deploy to Vercel
+Start the local stack and inspect its public configuration:
 
 ```bash
+npm run db:start
+npm run supabase -- status -o env \
+  --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+  --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+```
+
+Copy `.env.example` to `.env.local` and set the two public values printed by that
+command. The local API normally uses `http://127.0.0.1:54321`. Use the
+**publishable** key; never place a secret, service-role, JWT, or database credential
+in a `NEXT_PUBLIC_*` variable.
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<local publishable key>
+```
+
+Restart `npm run dev` after changing environment variables. The local stack applies
+the migration in `supabase/migrations/` automatically. The schema contains:
+
+| Table | Purpose |
+| --- | --- |
+| `portfolio_holdings` | Coin, quantity, and purchase price |
+| `watchlist_entries` | One entry per coin per owner |
+| `price_alerts` | Coin, above/below direction, target, and creation time |
+
+All tables force row-level security, require the authenticated owner, and grant
+only the select/insert/delete operations used by the application. Ownership comes
+from verified Supabase claims, not editable user metadata. Anonymous identities
+cannot use cloud storage.
+
+Local email confirmation is disabled so the authenticated browser tests can
+create disposable accounts. The local stack does not create or modify hosted
+Supabase resources.
+
+### Local Database Commands
+
+```bash
+npm run db:test       # pgTAP ownership and constraint checks
+npm run db:advisors   # security and performance advisors
+npm run db:reset      # destructive reset of the local database only
+npm run supabase -- stop --no-backup
+```
+
+Use `db:reset` only when local test data is disposable. It removes local users and
+rows. Do not run hosted migration or deployment commands unless a hosted project
+has been explicitly selected and approved.
+
+## Market Data Configuration
+
+Browser requests use the allowlisted `/api/crypto/*` route, not a public upstream
+URL. The route accepts only the supported market, global, and OHLC queries and
+validates response shape, size, timeout, and retry headers.
+
+The following optional variables are **server-only**:
+
+```env
+CRYPTO_API_URL=https://api.coingecko.com/api/v3
+COINGECKO_API_KEY=
+```
+
+`CRYPTO_API_URL` is restricted to CoinGecko's `/api/v3` origin, except HTTP on
+localhost for a test double. `COINGECKO_API_KEY`, when set, is sent as the Demo API
+key header. It is never embedded in client code. Without it, requests use the
+public endpoint and may be rate limited.
+
+Quotes refresh every 30 seconds while visible, global data every 60 seconds, and
+OHLC data every five minutes. Quotes older than 90 seconds are marked stale, and
+alert evaluation pauses rather than treating old prices as current. CoinGecko
+determines OHLC granularity; the chart discloses it and offers a data-table
+fallback.
+
+## Storage Boundaries
+
+- Signed-out users always use device-local storage.
+- Signed-in users default to their private cloud collection.
+- **View device data** switches to local storage without copying cloud records.
+- **Use cloud account** returns to the cloud collection without copying local records.
+- Signing out returns to device-local storage.
+
+Cloud errors never overwrite device-local data. Supabase SSR cookies and verified
+claims are used for server identity; the Next.js proxy refreshes sessions when an
+auth cookie is present.
+
+## Production Checklist
+
+Before exposing cloud accounts publicly:
+
+1. Select and configure an explicit Supabase project; apply and verify the checked-in
+   migrations there deliberately.
+2. Set the project's HTTPS URL and publishable key in the hosting environment.
+3. Configure the Auth site URL and exact allowed redirect URLs.
+4. Enable email confirmation and configure custom SMTP. Supabase's default SMTP
+   service is restricted to project organization members and is not suitable for
+   public confirmation email.
+5. Review Auth rate limits, password policy, session expiry, and monitoring.
+6. Run database policy tests and advisors against a safe environment, then verify
+   two separate owners cannot read or mutate each other's records.
+7. Run `npm run build`, followed by `npm run start` on a Node.js host. This App
+   Router application needs its server runtime; copying only `.next` to static
+   hosting is not a deployment.
+
+No deployment is performed by the test scripts or by this repository's CI.
+
+## Verification
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run audit:prod
+npm run db:test
+npm run db:advisors
 npm run build
-vercel deploy
+npm run test:e2e
 ```
 
-### Deploy to Other Platforms
-
-1. Build the project: `npm run build`
-2. Deploy the `.next` folder to your hosting provider
-3. Set environment variables on your hosting platform
-
-## 🧪 Scripts
+The browser suite runs desktop and mobile Chromium projects. It mocks market
+responses for deterministic UI checks. Authenticated cloud isolation tests run
+only when these test-only variables are provided:
 
 ```bash
-npm run dev        # Start the dev server
-npm run build      # Production build
-npm run lint       # ESLint
-npm run typecheck  # tsc --noEmit
-npm test           # Vitest unit tests
+E2E_SUPABASE_URL=http://127.0.0.1:54321 \
+E2E_SUPABASE_PUBLISHABLE_KEY=<local publishable key> \
+npm run test:e2e
 ```
 
-CI runs typecheck, lint, tests and build on every push and pull request
-(see `.github/workflows/ci.yml`).
+In CI, the workflow starts a clean local Supabase stack, publishes only its URL
+and publishable key, runs all checks, builds with Node 22.12, and runs authenticated
+desktop/mobile tests. Failure traces and screenshots are uploaded as artifacts.
 
-`npm audit --omit=dev` reports zero vulnerabilities. The remaining advisories are
-confined to ESLint's build-time tooling (`braces` via `fast-glob` inside
-`eslint-config-next`) and are not shipped to the browser.
+## Project Layout
 
-## 🔒 Security Notes
+```text
+src/app/                 App Router pages, auth actions, and market proxy
+src/components/          Dashboard panels, forms, charts, and shared UI
+src/hooks/               Market polling, persistence, forms, and Undo lifecycle
+src/lib/                 Validation, calculations, caching, and Supabase adapters
+src/types/               Current domain and generated database types
+supabase/migrations/     Schema, grants, constraints, and RLS policies
+supabase/tests/          pgTAP ownership and constraint checks
+e2e/                     Desktop/mobile browser workflows
+.github/workflows/ci.yml Complete verification pipeline
+```
 
-- Never commit `.env.local` to version control
-- Use Supabase Row Level Security (RLS) for production
-- Implement user authentication before deploying
-- Validate all user inputs server-side
+Theme tokens live in `src/app/globals.css`. Shared polling intervals live in
+`src/lib/marketSchemas.ts`; the supported coin catalog lives in `src/lib/coins.ts`.
+Extend the catalog and its validation together rather than adding arbitrary
+upstream paths.
 
-## 📈 Performance Optimization
+## Delivery Workflow
 
-- Auto-refresh throttling to prevent API rate limits
-- Memoized components to prevent unnecessary re-renders
-- Lazy loading for chart components
-- Optimized image loading with next/image
-
-## 🐛 Troubleshooting
-
-### Charts not displaying
-- Ensure Chart.js is properly installed: `npm install chart.js react-chartjs-2`
-- Check browser console for errors
-
-### API rate limiting
-- CoinGecko free tier has rate limits
-- Consider caching responses or upgrading to API plan
-
-### Supabase connection issues
-- Verify credentials in `.env.local`
-- Check Supabase service is running
-- Ensure tables exist with correct schema
-
-## 📝 License
-
-MIT License - feel free to use this project for personal and commercial purposes
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📞 Support
-
-For issues and questions:
-1. Check GitHub Issues page
-2. Review the documentation
-3. Check CoinGecko API docs for market data questions
-4. Check Supabase documentation for database questions
-
----
-
-**Built with ❤️ for crypto enthusiasts**
+Changes are developed on the existing `testing-main` branch in focused commits.
+Each implementation phase is pushed, opened as a separate pull request to `main`,
+verified by CI, and merged before the next phase. See `IMPLEMENTATION_PLAN.md` for
+the phase exit gates.

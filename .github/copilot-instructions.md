@@ -1,149 +1,79 @@
-# CryptoFlow Analytics - Development Guidelines
+# CryptoFlow Development Guidelines
 
-This is a professional cryptocurrency analytics dashboard built with Next.js and TypeScript.
+## Stack And Runtime
 
-## Project Overview
-
-CryptoFlow Analytics is a real-time cryptocurrency tracking and portfolio management application featuring:
-- Live price tracking with real-time updates
-- Portfolio management with performance analytics
-- Interactive candlestick charts with multiple timeframes
-- Intelligent market alerts with notifications
-- Watchlist functionality with top gainers tracking
+- Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, and Chart.js.
+- Use Node 22.12 from `.nvmrc` and `npm ci` for reproducible checks.
+- This Next.js version may differ from model training data. Read the relevant
+  installed guide under `node_modules/next/dist/docs/` before changing framework APIs.
+- Use `src/proxy.ts`, `NextRequest`, generated `RouteContext`, and current Server
+  Action conventions. Do not restore deprecated middleware or old route signatures.
 
 ## Architecture
 
-### Tech Stack
-- **Framework**: Next.js 15+ with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Charts**: Chart.js + react-chartjs-2
-- **State**: React Hooks
-- **API**: CoinGecko (free tier)
-- **Database**: Supabase (optional)
+- `src/app/api/crypto/[...path]/route.ts` is the only browser market-data boundary.
+  Keep upstream paths, parameters, origin, payload size, and timeout constrained.
+- `src/lib/marketSchemas.ts` defines the supported query/response contracts and
+  polling intervals. `src/lib/marketCache.ts` deduplicates quote snapshots.
+- `useLocalUserData` owns versioned browser persistence. `useCloudCollection` owns
+  authenticated mutations and must tolerate overlapping requests and account changes.
+- Cloud adapters live in `src/lib/supabase/`, not `src/lib/supabase.ts`.
+- Current domain types are `PortfolioHolding`, `WatchlistEntry`, and `PriceAlert`.
+- Current tables are `portfolio_holdings`, `watchlist_entries`, and `price_alerts`.
 
-### Key Directories
-- `/src/app/` - Next.js app routes and layouts
-- `/src/components/` - React components
-- `/src/lib/` - Utilities and API clients
-- `/src/types/` - TypeScript interfaces
+## Data And Security Boundaries
 
-## Development Setup
+- Device-local and cloud collections are separate. Never silently merge or copy them.
+- Use publishable keys in public clients. Secret/service-role keys and CoinGecko keys
+  remain server-only.
+- Verify cloud identity with Supabase SSR claims; never authorize from user metadata.
+- Keep forced RLS, owner predicates, explicit grants, and database constraints.
+- Validate all action, form, proxy, storage, and database inputs at their boundary.
+- Never return a submitted password in action state.
+- Do not create hosted Supabase resources or deploy without explicit approval.
 
-1. **Install dependencies**: `npm install`
-2. **Configure environment**: Copy `.env.local` and add Supabase credentials
-3. **Run dev server**: `npm run dev`
-4. **Build for production**: `npm run build`
+## Product Accuracy
 
-## Component Guidelines
+- The supported catalog is defined in `src/lib/coins.ts`; do not claim arbitrary
+  CoinGecko search, trending data, or all-coin coverage.
+- Quotes are USD. Missing values are unavailable, and partial portfolio totals must
+  remain explicitly partial.
+- Alerts are evaluated only while the dashboard is open. Email, push, SMS, and
+  background delivery are not implemented; do not add controls implying otherwise.
+- Preserve keyboard tabs, visible mobile labels, 44px targets, linked errors, focus
+  recovery, numeric alignment, and reversible deletion.
 
-### Client Components
-All components in `/components/` use `'use client'` directive for interactivity:
-- `LivePriceTracker` - Displays cryptocurrency prices with auto-refresh
-- `PriceCard` - Individual crypto price display card
-- `CandleStickChart` - Interactive price charts with timeframe selection
-- `PortfolioManagement` - Portfolio tracking with gain/loss calculations
-- `Watchlist` - Custom watchlist with market overview
-- `MarketAlerts` - Price alert creation and management
+## Implementation Style
 
-### Data Flow
-1. Components fetch data from CoinGecko API via `lib/cryptoApi.ts`
-2. Optional Supabase integration via `lib/supabase.ts`
-3. State managed with React useState/useEffect hooks
-4. Type safety with TypeScript interfaces in `types/index.ts`
+- Use functional components and existing shared UI primitives.
+- Keep theme tokens in `src/app/globals.css`; avoid unrelated visual redesigns.
+- Prefer focused changes and existing schemas/helpers over duplicated validation.
+- Do not add speculative features, inline explanatory comments, or new dependencies
+  without a concrete need.
+- Use `apply_patch` for edits and keep generated output out of commits.
 
-## Code Style
+## Verification
 
-- Use TypeScript for type safety
-- Prefer functional components with hooks
-- Use Tailwind CSS for styling (no inline styles)
-- Component names in PascalCase
-- File names in PascalCase for components, camelCase for utilities
-- Add JSDoc comments for complex functions
+Run the narrowest relevant tests first, then:
 
-## API Integration
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run audit:prod
+npm run db:test
+npm run db:advisors
+npm run build
+npm run test:e2e
+```
 
-### CoinGecko API
-- Free tier, no authentication required
-- Rate limited to prevent abuse
-- Used for market data and OHLC candlestick data
-- Fallback: Consider implementing caching
+Local database commands require Docker. Browser cloud tests require
+`E2E_SUPABASE_URL` and `E2E_SUPABASE_PUBLISHABLE_KEY`; market responses are mocked,
+but authenticated ownership checks use the local Supabase stack.
 
-### Supabase Integration
-- Optional for user data persistence
-- Tables: `portfolio_assets`, `watchlist`, `market_alerts`
-- Row-level security should be implemented for production
+## Git Workflow
 
-## Testing & Quality
-
-- Run TypeScript check: `npx tsc --noEmit`
-- Check ESLint: `npm run lint`
-- Build verification: `npm run build`
-
-## Performance Considerations
-
-- Auto-refresh throttled to 30-second intervals
-- Charts lazy-loaded for better initial load
-- Images optimized with next/image
-- Memoization for expensive computations
-
-## Common Tasks
-
-### Adding a New Cryptocurrency
-1. Update the default list in `LivePriceTracker.tsx`
-2. Verify data format matches `Cryptocurrency` interface
-3. Test chart rendering with new data
-
-### Creating Market Alerts
-1. Reference `MarketAlerts.tsx` component
-2. Integrate with Supabase `market_alerts` table
-3. Implement notification logic (email/push)
-
-### Extending Portfolio Features
-1. Add new fields to `portfolio_assets` table
-2. Update `PortfolioAsset` interface in `types/index.ts`
-3. Update calculations in `PortfolioManagement.tsx`
-
-## Security Notes
-
-- Never commit `.env.local` file
-- Implement user authentication before production
-- Use Supabase RLS policies for data protection
-- Validate all user inputs server-side
-- Keep dependencies updated
-
-## Deployment
-
-### Vercel (Recommended)
-1. Push code to Git repository
-2. Connect to Vercel project
-3. Set environment variables in Vercel dashboard
-4. Deploy with `vercel deploy`
-
-### Other Platforms
-1. Run `npm run build`
-2. Deploy `.next` folder
-3. Set environment variables on platform
-4. Ensure Node.js 18+ is available
-
-## Troubleshooting
-
-- **Build errors**: Check TypeScript with `npx tsc --noEmit`
-- **Chart issues**: Verify Chart.js installation and imports
-- **API errors**: Check `.env.local` and API rate limits
-- **Styling issues**: Ensure Tailwind CSS is properly configured
-
-## Future Enhancements
-
-1. User authentication with Supabase Auth
-2. Real-time WebSocket updates instead of polling
-3. Advanced technical analysis indicators
-4. Mobile app with React Native
-5. API endpoint for third-party integrations
-6. Dark/light theme toggle
-7. Export portfolio reports (PDF/CSV)
-
----
-
-**Last Updated**: April 2, 2026
-**Maintained by**: CryptoFlow Team
+Use the existing `testing-main` branch. Make focused commits, push each verified
+slice, and open a separate phase PR to `main`. Wait for the exact-head CI run,
+merge through the PR, synchronize `testing-main`, and verify the resulting main CI.
+Do not create another feature branch or push directly to `main`.
