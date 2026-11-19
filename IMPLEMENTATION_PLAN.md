@@ -11,6 +11,10 @@ The documentation-only preflight in pull request #1 verified that the repository
 accepts an attributed commit, branch push, pull request, and ruleset-compliant
 merge before application code was changed.
 
+The section numbers below describe work packages, not GitHub PR numbers. Several
+packages required follow-up hardening PRs: cloud storage used PRs #3–#5,
+accessibility used PR #6, and final regression/release verification uses PR #7.
+
 ## Phase 1 — Security and build baseline
 
 - Upgrade Next.js to a patched compatible release and update matching lint tooling.
