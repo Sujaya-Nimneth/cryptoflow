@@ -13,33 +13,6 @@ export interface Cryptocurrency {
   image: string;
 }
 
-export interface PortfolioAsset {
-  id: string;
-  crypto_id: string;
-  user_id: string;
-  quantity: number;
-  purchase_price: number;
-  purchase_date: string;
-  created_at: string;
-}
-
-export interface Watchlist {
-  id: string;
-  user_id: string;
-  crypto_id: string;
-  added_date: string;
-}
-
-export interface MarketAlert {
-  id: string;
-  user_id: string;
-  crypto_id: string;
-  alert_type: 'price_above' | 'price_below';
-  target_price: number;
-  is_triggered: boolean;
-  created_at: string;
-}
-
 export interface ChartData {
   timestamp: number;
   open: number;
@@ -76,11 +49,4 @@ export interface PriceAlert {
   direction: 'above' | 'below';
   targetPrice: number;
   createdAt: string;
-}
-
-export interface PortfolioPerformance {
-  total_investment: number;
-  current_value: number;
-  total_return: number;
-  return_percentage: number;
 }
