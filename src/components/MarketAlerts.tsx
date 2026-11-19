@@ -112,7 +112,7 @@ export default function MarketAlerts() {
             Results appear only on this screen. Email, push, SMS, and background delivery are not connected.
           </p>
         </div>
-        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>
+        <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending || undoDelete.deleted !== null}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
@@ -133,65 +133,65 @@ export default function MarketAlerts() {
               </IconButton>
             }
           />
-          <form ref={formRef} onSubmit={handleSubmit} noValidate className="space-y-4 p-5">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field label="Coin" htmlFor="alert-coin">
-                <Select
-                  id="alert-coin"
-                  name="cryptoId"
-                  autoComplete="off"
-                  required
-                  value={draft.cryptoId}
-                  onChange={(event) => updateDraft('cryptoId', event.target.value)}
-                >
-                  {COINS.map((coin) => (
-                    <option key={coin.id} value={coin.id}>
-                      {coin.name} ({coin.symbol})
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+          <form ref={formRef} onSubmit={handleSubmit} noValidate aria-busy={pending} className="space-y-4 p-5">
+            <fieldset disabled={pending} className="min-w-0 space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field label="Coin" htmlFor="alert-coin">
+                  <Select
+                    id="alert-coin"
+                    name="cryptoId"
+                    autoComplete="off"
+                    required
+                    value={draft.cryptoId}
+                    onChange={(event) => updateDraft('cryptoId', event.target.value)}
+                  >
+                    {COINS.map((coin) => (
+                      <option key={coin.id} value={coin.id}>
+                        {coin.name} ({coin.symbol})
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
 
-              <Field label="Condition" htmlFor="alert-direction">
-                <Select
-                  id="alert-direction"
-                  name="direction"
-                  autoComplete="off"
-                  required
-                  value={draft.direction}
-                  onChange={(event) =>
-                    updateDraft('direction', event.target.value)
-                  }
-                >
-                  <option value="above">Price rises above</option>
-                  <option value="below">Price falls below</option>
-                </Select>
-              </Field>
+                <Field label="Condition" htmlFor="alert-direction">
+                  <Select
+                    id="alert-direction"
+                    name="direction"
+                    autoComplete="off"
+                    required
+                    value={draft.direction}
+                    onChange={(event) => updateDraft('direction', event.target.value)}
+                  >
+                    <option value="above">Price rises above</option>
+                    <option value="below">Price falls below</option>
+                  </Select>
+                </Field>
 
-              <Field label="Target price (USD)" htmlFor="alert-target" error={errors.targetPrice}>
-                <Input
-                  id="alert-target"
-                  name="targetPrice"
-                  type="number"
-                  min="0"
-                  max={MAX_POSITIVE_AMOUNT}
-                  step="any"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  required
-                  placeholder="50000"
-                  value={draft.targetPrice}
-                  onChange={(event) => updateDraft('targetPrice', event.target.value)}
-                />
-              </Field>
-            </div>
+                <Field label="Target price (USD)" htmlFor="alert-target" error={errors.targetPrice}>
+                  <Input
+                    id="alert-target"
+                    name="targetPrice"
+                    type="number"
+                    min="0"
+                    max={MAX_POSITIVE_AMOUNT}
+                    step="any"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    required
+                    placeholder="50000"
+                    value={draft.targetPrice}
+                    onChange={(event) => updateDraft('targetPrice', event.target.value)}
+                  />
+                </Field>
+              </div>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={closeForm}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Create alert'}</Button>
-            </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="secondary" onClick={closeForm} disabled={pending}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Create alert'}</Button>
+              </div>
+            </fieldset>
           </form>
         </Card>
         )}
@@ -212,7 +212,7 @@ export default function MarketAlerts() {
           icon={<FiBell size={24} />}
           title="No alerts yet"
           description="Create a target to see when its price crosses your threshold while this dashboard is open."
-          action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>Create alert</Button>}
+          action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending || undoDelete.deleted !== null}>Create alert</Button>}
         />
       ) : (
         <ul className="space-y-3">

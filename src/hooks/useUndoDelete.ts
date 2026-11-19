@@ -27,6 +27,7 @@ export function useUndoDelete<TItem extends { id: string }>({
   const [error, setError] = useState<string | null>(null);
   const deletedRef = useRef<DeletedItem<TItem> | null>(null);
   const inFlight = useRef(false);
+  const expiresAt = useRef<number | null>(null);
   const generation = useRef(0);
   const undoRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -42,22 +43,32 @@ export function useUndoDelete<TItem extends { id: string }>({
 
   const clearNotice = useCallback((restoreFocus = true) => {
     deletedRef.current = null;
+    expiresAt.current = null;
     setDeleted(null);
     if (!restoreFocus) returnFocusRef.current = null;
   }, []);
 
   useEffect(() => {
     if (!deleted) return;
-    const timeout = window.setTimeout(() => clearNotice(false), UNDO_DELETE_MS);
-    const pauseWhenHidden = () => {
-      if (document.hidden) clearNotice(false);
+    if (document.hidden && !inFlight.current) {
+      clearNotice(false);
+      return;
+    }
+    const expires = expiresAt.current ?? Date.now() + UNDO_DELETE_MS;
+    expiresAt.current = expires;
+    const expire = () => {
+      if (deletedRef.current && !inFlight.current) clearNotice(false);
     };
-    document.addEventListener('visibilitychange', pauseWhenHidden);
+    const timeout = window.setTimeout(expire, Math.max(0, expires - Date.now()));
+    const expireWhenHidden = () => {
+      if (document.hidden) expire();
+    };
+    document.addEventListener('visibilitychange', expireWhenHidden);
     return () => {
       window.clearTimeout(timeout);
-      document.removeEventListener('visibilitychange', pauseWhenHidden);
+      document.removeEventListener('visibilitychange', expireWhenHidden);
     };
-  }, [clearNotice, deleted]);
+  }, [clearNotice, deleted, pending]);
 
   useEffect(() => {
     if (pending) return;
@@ -90,6 +101,7 @@ export function useUndoDelete<TItem extends { id: string }>({
       if (saved) {
         const notice = { item, label: describeRef.current(item) };
         deletedRef.current = notice;
+        expiresAt.current = Date.now() + UNDO_DELETE_MS;
         setDeleted(notice);
       }
       return saved;
@@ -102,6 +114,10 @@ export function useUndoDelete<TItem extends { id: string }>({
   const undo = useCallback(async () => {
     const notice = deletedRef.current;
     if (!notice || inFlight.current) return false;
+    if (expiresAt.current !== null && Date.now() >= expiresAt.current) {
+      clearNotice(false);
+      return false;
+    }
     inFlight.current = true;
     const currentGeneration = generation.current;
     setPending(true);
@@ -109,7 +125,7 @@ export function useUndoDelete<TItem extends { id: string }>({
     try {
       const saved = await restore(notice.item);
       if (currentGeneration !== generation.current) return false;
-      if (saved) clearNotice();
+      if (saved && deletedRef.current === notice) clearNotice();
       else setError(`Could not restore ${notice.label}. Try Undo again.`);
       return saved;
     } finally {
