@@ -4,8 +4,8 @@
 
 Implementation proceeds in small, independently reviewable commits on the
 existing `testing-main` branch. Each phase is pushed to `testing-main` after its
-relevant checks pass. The implementation pull request targets `main`; direct
-pushes to `main` are not part of this workflow.
+relevant checks pass, opened as its own pull request to `main`, and merged before
+the next phase begins. Direct pushes to `main` are not part of this workflow.
 
 The documentation-only preflight in pull request #1 verified that the repository
 accepts an attributed commit, branch push, pull request, and ruleset-compliant
