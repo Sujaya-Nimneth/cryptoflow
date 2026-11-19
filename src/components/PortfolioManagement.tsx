@@ -13,11 +13,11 @@ import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { useLocalUserData } from '@/hooks/useLocalUserData';
+import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
+import { localPortfolioSchema } from '@/lib/userDataSchemas';
 
-const SEED_HOLDINGS: PortfolioHolding[] = [
-  { id: 'seed-btc', cryptoId: 'bitcoin', quantity: 0.5, purchasePrice: 40000 },
-  { id: 'seed-eth', cryptoId: 'ethereum', quantity: 5, purchasePrice: 2000 },
-];
+const EMPTY_PORTFOLIO = { version: 1 as const, holdings: [] as PortfolioHolding[] };
 
 interface DraftHolding {
   cryptoId: string;
@@ -28,7 +28,12 @@ interface DraftHolding {
 const EMPTY_DRAFT: DraftHolding = { cryptoId: COINS[0].id, quantity: '', purchasePrice: '' };
 
 export default function PortfolioManagement() {
-  const [holdings, setHoldings] = useState<PortfolioHolding[]>(SEED_HOLDINGS);
+  const { value: portfolio, status, setValue: setPortfolio, resetInvalid } = useLocalUserData(
+    LOCAL_USER_DATA_KEYS.portfolio,
+    localPortfolioSchema,
+    EMPTY_PORTFOLIO
+  );
+  const holdings = portfolio.holdings;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
@@ -76,22 +81,21 @@ export default function PortfolioManagement() {
       return;
     }
 
-    setHoldings((current) => [
-      ...current,
-      {
-        id: `${draft.cryptoId}-${Date.now()}`,
-        cryptoId: draft.cryptoId,
-        quantity,
-        purchasePrice,
-      },
-    ]);
+    const saved = setPortfolio((current) => ({
+      version: 1,
+      holdings: [...current.holdings, { id: crypto.randomUUID(), cryptoId: draft.cryptoId, quantity, purchasePrice }],
+    }));
+    if (!saved) return;
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setShowForm(false);
   }
 
   function handleDelete(id: string) {
-    setHoldings((current) => current.filter((holding) => holding.id !== id));
+    setPortfolio((current) => ({
+      version: 1,
+      holdings: current.holdings.filter((holding) => holding.id !== id),
+    }));
   }
 
   return (
@@ -103,11 +107,13 @@ export default function PortfolioManagement() {
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready'}>
           <FiPlus aria-hidden="true" /> Add asset
         </Button>
       </div>
 
+      {status === 'invalid' && <div role="alert"><DataNotice message="Saved portfolio data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid portfolio data</Button></div>}
+      {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
       {!loading && rows.length > 0 && (
         <p role="status" className={`rounded-lg p-3 text-sm ${stats.complete && stats.staleHoldings === 0 ? 'bg-slate-800/60 text-slate-300' : 'border border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>

@@ -13,6 +13,9 @@ import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { useLocalUserData } from '@/hooks/useLocalUserData';
+import { LOCAL_USER_DATA_KEYS } from '@/lib/localUserData';
+import { localAlertsSchema } from '@/lib/userDataSchemas';
 
 interface DraftAlert {
   cryptoId: string;
@@ -21,9 +24,15 @@ interface DraftAlert {
 }
 
 const EMPTY_DRAFT: DraftAlert = { cryptoId: 'bitcoin', direction: 'above', targetPrice: '' };
+const EMPTY_ALERTS = { version: 1 as const, alerts: [] as PriceAlert[] };
 
 export default function MarketAlerts() {
-  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const { value: alertStore, status, setValue: setAlertStore, resetInvalid } = useLocalUserData(
+    LOCAL_USER_DATA_KEYS.alerts,
+    localAlertsSchema,
+    EMPTY_ALERTS
+  );
+  const alerts = alertStore.alerts;
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
@@ -55,23 +64,27 @@ export default function MarketAlerts() {
       return;
     }
 
-    setAlerts((current) => [
-      {
-        id: `${draft.cryptoId}-${Date.now()}`,
+    const saved = setAlertStore((current) => ({
+      version: 1,
+      alerts: [{
+        id: crypto.randomUUID(),
         cryptoId: draft.cryptoId,
         direction: draft.direction,
         targetPrice,
         createdAt: new Date().toISOString(),
-      },
-      ...current,
-    ]);
+      }, ...current.alerts],
+    }));
+    if (!saved) return;
     setDraft(EMPTY_DRAFT);
     setFormError(null);
     setShowForm(false);
   }
 
   function deleteAlert(id: string) {
-    setAlerts((current) => current.filter((alert) => alert.id !== id));
+    setAlertStore((current) => ({
+      version: 1,
+      alerts: current.alerts.filter((alert) => alert.id !== id),
+    }));
   }
 
   return (
@@ -86,11 +99,13 @@ export default function MarketAlerts() {
           </p>
           {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
         </div>
-        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm}>
+        <Button onClick={() => setShowForm((open) => !open)} aria-expanded={showForm} disabled={status !== 'ready'}>
           <FiBell aria-hidden="true" /> New alert
         </Button>
       </div>
 
+      {status === 'invalid' && <div role="alert"><DataNotice message="Saved alert data is invalid and was not overwritten." /><Button variant="secondary" size="sm" onClick={resetInvalid}>Reset invalid alert data</Button></div>}
+      {status === 'unavailable' && <DataNotice message="Browser storage is unavailable. Changes cannot be saved on this device." />}
       {error && <DataNotice message={error} onRetry={() => void refresh()} />}
 
       {showForm && (
