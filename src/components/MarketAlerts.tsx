@@ -49,6 +49,7 @@ export default function MarketAlerts() {
   );
 
   const triggeredCount = evaluated.filter((alert) => alert.triggered).length;
+  const checksRunning = !loading && !error && freshness !== 'stale' && updatedAt !== undefined;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,12 +84,19 @@ export default function MarketAlerts() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-white">Market alerts</h2>
-          <p className="text-sm text-slate-400" aria-live="polite">
+          <p className="text-sm text-slate-400">
             {loading
               ? 'Checking live prices…'
-              : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered · Checks every 30 seconds while open`}
+              : error
+                ? 'Checks paused while price data is unavailable. Retry to resume.'
+                : freshness === 'stale'
+                  ? 'Checks paused because quotes are stale. Refresh prices to resume.'
+                  : `${triggeredCount} of ${alerts.length} alert${alerts.length === 1 ? '' : 's'} triggered · Checks every 30 seconds while this dashboard is open`}
           </p>
           {!loading && <p className="text-xs text-slate-400"><FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} /></p>}
+          <p className="mt-1 text-xs text-slate-400">
+            Results appear only on this screen. Email, push, SMS, and background delivery are not connected.
+          </p>
         </div>
         <Button onClick={toggleForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>
           <FiBell aria-hidden="true" /> New alert
@@ -189,7 +197,7 @@ export default function MarketAlerts() {
         <EmptyState
           icon={<FiBell size={24} />}
           title="No alerts yet"
-          description="Create an alert to be notified when a coin crosses your target price."
+          description="Create a target to see when its price crosses your threshold while this dashboard is open."
           action={<Button onClick={openForm} aria-expanded={showForm} aria-controls="alert-form" disabled={status !== 'ready' || pending}>Create alert</Button>}
         />
       ) : (
@@ -257,26 +265,13 @@ export default function MarketAlerts() {
         </ul>
       )}
 
-      <Card>
-        <CardHeader title="Notification settings" subtitle="Delivery channels for triggered alerts" />
-        <div className="space-y-3 p-5">
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">Email notifications</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">Browser push notifications</span>
-          </label>
-          <label className="flex cursor-pointer items-center gap-3">
-            <input type="checkbox" className="h-4 w-4 accent-orange-600" />
-            <span className="text-slate-300">SMS notifications</span>
-          </label>
-          <p className="text-xs text-slate-500">
-            Delivery is a placeholder — connect Supabase or an email provider to enable it.
-          </p>
-        </div>
-      </Card>
+      <p role="status" className="text-sm text-slate-400">
+        {alerts.length === 0
+          ? 'No targets are being checked.'
+          : checksRunning
+            ? `Checking ${alerts.length} target${alerts.length === 1 ? '' : 's'} while this dashboard stays open. Closing it stops checks.`
+            : 'No checks are running. Wait for a recent quote or retry the price request.'}
+      </p>
     </div>
   );
 }

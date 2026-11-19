@@ -138,3 +138,19 @@ test('validates amounts inline and restores form focus on mobile and desktop', a
   await expect(page.getByRole('button', { name: 'New alert' }).first()).toBeFocused();
 });
 
+test('describes real watchlist coverage and dashboard-only alert checks', async ({ page }) => {
+  await page.goto('/?tab=watchlist');
+  await expect(page.getByText('Combined price')).toHaveCount(0);
+  await expect(page.getByText('Quote coverage')).toBeVisible();
+  await expect(page.getByText('0 / 0', { exact: true })).toBeVisible();
+  await page.getByLabel('Add coin').selectOption('bitcoin');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(page.getByText('1 / 1', { exact: true })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Alerts' }).click();
+  await expect(page.getByText('Notification settings')).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  await expect(page.getByText(/Email, push, SMS, and background delivery are not connected/)).toBeVisible();
+  await expect(page.getByText(/Create a target to see when its price crosses/)).toBeVisible();
+});
+

@@ -27,10 +27,7 @@ export default function Watchlist() {
     return COINS.filter((coin) => !tracked.has(coin.id));
   }, [entries]);
 
-  const combinedPrice = useMemo(
-    () => ids.reduce((sum, id) => sum + (coins.get(id)?.current_price ?? 0), 0),
-    [ids, coins]
-  );
+  const quotedCount = ids.filter((id) => coins.has(id)).length;
 
   async function addCoin() {
     const cryptoId = pendingCoin || availableCoins[0]?.id;
@@ -128,9 +125,9 @@ export default function Watchlist() {
                           </div>
                         </td>
                         <td className="px-3 py-3 sm:px-5 tabular-nums text-white">
-                          {coin ? formatPrice(coin.current_price) : <span className="text-slate-500">—</span>}
+                          {coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}
                         </td>
-                        <td className={`px-3 py-3 sm:px-5 tabular-nums ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-500'}`}>
+                        <td className={`px-3 py-3 sm:px-5 tabular-nums ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
                           {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
                         </td>
                         <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-300 sm:table-cell">
@@ -158,9 +155,9 @@ export default function Watchlist() {
         <div className="space-y-4">
           <StatTile label="Tracked assets" value={entries.length} />
           <StatTile
-            label="Combined price"
-            value={formatCompactCurrency(combinedPrice)}
-            hint="Sum of latest prices (not market cap)"
+            label="Quote coverage"
+            value={`${quotedCount} / ${entries.length}`}
+            hint={quotedCount === entries.length ? 'All tracked coins have quotes' : 'Tracked coins with an available quote'}
           />
           <TopMovers ids={ids} coins={coins} />
         </div>
