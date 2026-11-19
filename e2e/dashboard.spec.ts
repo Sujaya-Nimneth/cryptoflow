@@ -243,7 +243,7 @@ test('aligns numeric data and keeps visible controls touch-sized in populated pa
   await page.getByLabel('Target price (USD)').fill('60000');
   await page.locator('form').getByRole('button', { name: 'Create alert', exact: true }).click();
 
-  for (const width of [320, 390, 768, 1440]) {
+  for (const width of [320, 390, 640, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     for (const section of ['Portfolio', 'Watchlist', 'Alerts']) {
       await page.getByRole('tab', { name: section }).click();
