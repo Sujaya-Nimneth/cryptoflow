@@ -59,7 +59,7 @@ export default function Watchlist() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Watchlist</h2>
+          <h2 className="text-xl font-semibold text-white">Watchlist</h2>
           <p className="text-sm text-slate-400">Track the coins you care about</p>
         </div>
         <div className="flex items-end gap-2">
@@ -112,14 +112,14 @@ export default function Watchlist() {
               <table className="w-full min-w-[22rem] text-sm">
                 <caption className="sr-only">Tracked cryptocurrencies</caption>
                 <thead>
-                  <tr className="border-y border-slate-700 bg-slate-900/40 text-left">
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Coin</th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Price</th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">24h</th>
-                    <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 sm:table-cell">
+                  <tr className="border-y border-slate-700 text-left text-xs text-slate-400">
+                    <th scope="col" className="px-3 py-3 font-medium sm:px-5">Coin</th>
+                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Price</th>
+                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">24h</th>
+                    <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">
                       Market cap
                     </th>
-                    <th scope="col" className="px-3 py-3 sm:px-5 text-center font-semibold text-slate-200">
+                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">
                       Actions
                     </th>
                   </tr>
@@ -138,16 +138,16 @@ export default function Watchlist() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 sm:px-5 tabular-nums text-white">
+                        <td className="px-3 py-3 text-right tabular-nums text-white sm:px-5">
                           {coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}
                         </td>
-                        <td className={`px-3 py-3 sm:px-5 tabular-nums ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
+                        <td className={`px-3 py-3 text-right tabular-nums sm:px-5 ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
                           {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
                         </td>
-                        <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-300 sm:table-cell">
+                        <td className="hidden px-3 py-3 text-right tabular-nums text-slate-300 sm:px-5 sm:table-cell">
                           {coin ? formatCompactCurrency(coin.market_cap) : '—'}
                         </td>
-                        <td className="px-3 py-3 sm:px-5 text-center">
+                        <td className="px-3 py-3 text-right sm:px-5">
                           <IconButton
                             label={`Remove ${coinLabel(entry.cryptoId)} from watchlist`}
                             variant="danger"
@@ -167,12 +167,14 @@ export default function Watchlist() {
         </Card>
 
         <div className="space-y-4">
-          <StatTile label="Tracked assets" value={entries.length} />
-          <StatTile
-            label="Quote coverage"
-            value={`${quotedCount} / ${entries.length}`}
-            hint={quotedCount === entries.length ? 'All tracked coins have quotes' : 'Tracked coins with an available quote'}
-          />
+          <div className="grid grid-cols-2 gap-4">
+            <StatTile label="Tracked assets" value={entries.length} />
+            <StatTile
+              label="Quote coverage"
+              value={`${quotedCount} / ${entries.length}`}
+              hint={quotedCount === entries.length ? 'All tracked coins have quotes' : 'Tracked coins with an available quote'}
+            />
+          </div>
           <TopMovers ids={ids} coins={coins} />
         </div>
       </div>

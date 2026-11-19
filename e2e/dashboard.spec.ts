@@ -50,6 +50,54 @@ test('has no horizontal page overflow', async ({ page }) => {
   expect(overflow).toBe(false);
 });
 
+test('keeps tab labels and price-card rows readable at every viewport', async ({ page }) => {
+  await page.goto('/');
+  const priceCards = page.getByRole('region', { name: 'Live price tracking' }).locator('article');
+  await expect(priceCards).toHaveCount(5);
+
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const tablist = page.getByRole('tablist', { name: 'Dashboard sections' });
+    const tablistBox = await tablist.boundingBox();
+    expect(tablistBox).not.toBeNull();
+
+    for (const section of ['Dashboard', 'Portfolio', 'Watchlist', 'Alerts']) {
+      const tab = page.getByRole('tab', { name: section });
+      const tabBox = await tab.boundingBox();
+      const labelBox = await tab.locator('span').boundingBox();
+      expect(tabBox).not.toBeNull();
+      expect(labelBox).not.toBeNull();
+      expect(tabBox!.width).toBeGreaterThanOrEqual(44);
+      expect(tabBox!.height).toBeGreaterThanOrEqual(44);
+      expect(labelBox!.x).toBeGreaterThanOrEqual(tabBox!.x);
+      expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(tabBox!.x + tabBox!.width);
+      expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(tablistBox!.x + tablistBox!.width);
+    }
+
+    const boxes = await priceCards.evaluateAll((cards) => cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right };
+    }));
+    const rows: typeof boxes[] = [];
+    for (const box of boxes) {
+      const row = rows.find((candidate) => Math.abs(candidate[0].y - box.y) < 2);
+      if (row) row.push(box);
+      else rows.push([box]);
+    }
+    const expectedRowCount = width < 640 ? 1 : width < 1024 ? 2 : 3;
+    expect(rows.at(-1)?.length).toBe(width < 640 ? 1 : width < 1024 ? 1 : 2);
+    expect(rows.every((row) => row.length <= expectedRowCount)).toBe(true);
+    for (const row of rows) {
+      const left = Math.min(...row.map((box) => box.x));
+      const right = Math.max(...row.map((box) => box.right));
+      expect(Math.abs((left + right) / 2 - width / 2)).toBeLessThan(2);
+      expect(row.every((box) => Math.abs(box.height - row[0].height) < 2)).toBe(true);
+      expect(row.every((box) => Math.abs(box.width - row[0].width) < 2)).toBe(true);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  }
+});
+
 test('aligns candle bodies and wicks on the same time coordinates', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('img', { name: /Bitcoin: 42 4-hour candles/ })).toBeVisible();
@@ -179,5 +227,47 @@ test('restores deleted holdings, watchlist entries, and alerts with Undo', async
   await page.getByRole('button', { name: 'Delete Bitcoin alert' }).click();
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.getByRole('heading', { name: /Bitcoin.*BTC/ })).toBeVisible();
+});
+
+test('aligns numeric data and keeps visible controls touch-sized in populated panels', async ({ page }) => {
+  await page.goto('/?tab=portfolio');
+  await page.getByRole('button', { name: 'Add asset' }).first().click();
+  await page.getByLabel('Quantity', { exact: true }).fill('0.5');
+  await page.getByLabel('Purchase price (USD)').fill('40000');
+  await page.getByRole('button', { name: 'Save asset' }).click();
+  await page.getByRole('tab', { name: 'Watchlist' }).click();
+  await page.getByLabel('Add coin').selectOption('ethereum');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('tab', { name: 'Alerts' }).click();
+  await page.getByRole('button', { name: 'New alert' }).first().click();
+  await page.getByLabel('Target price (USD)').fill('60000');
+  await page.locator('form').getByRole('button', { name: 'Create alert', exact: true }).click();
+
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const section of ['Portfolio', 'Watchlist', 'Alerts']) {
+      await page.getByRole('tab', { name: section }).click();
+      const panel = page.getByRole('tabpanel', { name: section });
+      await expect(panel).toBeVisible();
+      const undersized = await panel.getByRole('button').evaluateAll((buttons) => buttons
+        .filter((button) => {
+          const style = getComputedStyle(button);
+          return style.visibility !== 'hidden' && style.display !== 'none';
+        })
+        .filter((button) => button.getBoundingClientRect().width < 44 || button.getBoundingClientRect().height < 44)
+        .map((button) => button.getAttribute('aria-label') ?? button.textContent));
+      expect(undersized).toEqual([]);
+      const numericHeaders = await panel.locator('th').evaluateAll((headers) => headers
+        .filter((header) => getComputedStyle(header).display !== 'none')
+        .filter((header) => /^(Quantity|Purchase|Current|Value|Gain \/ loss|Price|24h|Market cap)$/.test(header.textContent ?? ''))
+        .map((header) => getComputedStyle(header).textAlign));
+      expect(numericHeaders.every((alignment) => alignment === 'right')).toBe(true);
+      const numericCells = await panel.locator('td.tabular-nums').evaluateAll((cells) => cells
+        .filter((cell) => getComputedStyle(cell).display !== 'none')
+        .map((cell) => ({ alignment: getComputedStyle(cell).textAlign, figures: getComputedStyle(cell).fontVariantNumeric })));
+      expect(numericCells.every((cell) => cell.alignment === 'right' && cell.figures.includes('tabular-nums'))).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    }
+  }
 });
 

@@ -112,7 +112,7 @@ export default function PortfolioManagement() {
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Portfolio management</h2>
+          <h2 className="text-xl font-semibold text-white">Portfolio management</h2>
           <p className="text-sm text-slate-400">
             {loading ? 'Syncing live prices…' : <FreshnessLabel updatedAt={updatedAt} stale={freshness === 'stale'} />}
           </p>
@@ -201,7 +201,7 @@ export default function PortfolioManagement() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatTile label="Total investment" value={formatPrice(stats.totalInvestment)} />
         <StatTile
           label={stats.complete ? (stats.staleHoldings > 0 ? 'Value with stale quotes' : 'Current value') : 'Partial quoted value'}
@@ -232,20 +232,20 @@ export default function PortfolioManagement() {
             <table className="w-full min-w-[28rem] text-sm">
               <caption className="sr-only">Portfolio holdings and performance</caption>
               <thead>
-                <tr className="border-b border-slate-700 bg-slate-900/40 text-left">
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Asset</th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Quantity</th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                <tr className="border-b border-slate-700 text-left text-xs text-slate-400">
+                  <th scope="col" className="px-3 py-3 sm:px-5 font-medium">Asset</th>
+                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Quantity</th>
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Purchase
                   </th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 md:table-cell">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Current
                   </th>
-                  <th scope="col" className="hidden px-3 py-3 sm:px-5 font-semibold text-slate-200 sm:table-cell">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">
                     Value
                   </th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 font-semibold text-slate-200">Gain / loss</th>
-                  <th scope="col" className="px-3 py-3 sm:px-5 text-center font-semibold text-slate-200">
+                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Gain / loss</th>
+                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">
                     Actions
                   </th>
                 </tr>
@@ -259,26 +259,26 @@ export default function PortfolioManagement() {
                         <p className="font-semibold text-white">{coinLabel(row.cryptoId)}</p>
                         <p className="text-xs text-slate-400">{coinSymbol(row.cryptoId)}</p>
                       </td>
-                      <td className="px-3 py-3 sm:px-5 tabular-nums text-slate-200">
+                      <td className="px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5">
                         {formatQuantity(row.quantity)}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {formatPrice(row.purchasePrice)}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-slate-200 md:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {row.currentPrice === undefined ? 'Unavailable' : formatPrice(row.currentPrice)}
                         {row.quoteStatus === 'stale' && <span className="block text-xs text-amber-300">Stale</span>}
                       </td>
-                      <td className="hidden px-3 py-3 sm:px-5 tabular-nums text-white sm:table-cell">
+                      <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:table-cell">
                         {row.value === undefined ? 'Unavailable' : formatPrice(row.value)}
                       </td>
                       <td
-                        className={`px-3 py-3 sm:px-5 tabular-nums ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
+                        className={`px-3 py-3 text-right tabular-nums sm:px-5 ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
                       >
                         <p className="font-semibold">{row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}</p>
                         <p className="text-xs">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>
                       </td>
-                      <td className="px-3 py-3 sm:px-5 text-center">
+                      <td className="px-3 py-3 text-right sm:px-5">
                         <IconButton
                           label={`Remove ${coinLabel(row.cryptoId)}`}
                           variant="danger"
@@ -319,7 +319,7 @@ export default function PortfolioManagement() {
                     aria-label={`${coinSymbol(row.cryptoId)} allocation`}
                   >
                     <div
-                      className="h-full rounded-full bg-gradient-to-r from-orange-600 to-amber-500"
+                      className="h-full rounded-full bg-orange-500"
                       style={{ width: `${row.share}%` }}
                     />
                   </div>
