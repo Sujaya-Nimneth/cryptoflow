@@ -229,7 +229,7 @@ export default function PortfolioManagement() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[28rem] text-sm">
+            <table className="w-full min-w-0 text-sm md:min-w-[28rem]">
               <caption className="sr-only">Portfolio holdings and performance</caption>
               <thead>
                 <tr className="border-b border-slate-700 text-left text-xs text-slate-400">
@@ -241,10 +241,10 @@ export default function PortfolioManagement() {
                   <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Current
                   </th>
-                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">
                     Value
                   </th>
-                  <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Gain / loss</th>
+                  <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 md:table-cell">Gain / loss</th>
                   <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">
                     Actions
                   </th>
@@ -263,6 +263,10 @@ export default function PortfolioManagement() {
                         <p>{formatQuantity(row.quantity)}</p>
                         <p className="mt-1 whitespace-nowrap text-xs text-white">{row.value === undefined ? 'Unavailable' : formatPrice(row.value)}</p>
                         <p className="text-xs text-slate-400">Value</p>
+                        <p className={`mt-1 whitespace-nowrap text-xs font-semibold ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}
+                        </p>
+                        <p className="text-xs text-slate-400">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>
                       </td>
                       <td className="hidden px-3 py-3 text-right tabular-nums text-slate-200 sm:px-5 md:table-cell">
                         {formatQuantity(row.quantity)}
@@ -278,7 +282,7 @@ export default function PortfolioManagement() {
                         {row.value === undefined ? 'Unavailable' : formatPrice(row.value)}
                       </td>
                       <td
-                        className={`px-3 py-3 text-right tabular-nums sm:px-5 ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
+                        className={`hidden px-3 py-3 text-right tabular-nums sm:px-5 md:table-cell ${row.gainLoss === undefined ? 'text-slate-400' : isGain ? 'text-emerald-400' : 'text-rose-400'}`}
                       >
                         <p className="font-semibold">{row.gainLoss === undefined ? 'Unavailable' : formatSignedPrice(row.gainLoss)}</p>
                         <p className="text-xs">{row.gainLossPercent === undefined ? 'No current quote' : formatPercent(row.gainLossPercent)}</p>

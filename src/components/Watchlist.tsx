@@ -109,13 +109,13 @@ export default function Watchlist() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[22rem] text-sm">
+              <table className="w-full min-w-0 text-sm sm:min-w-[22rem]">
                 <caption className="sr-only">Tracked cryptocurrencies</caption>
                 <thead>
                   <tr className="border-y border-slate-700 text-left text-xs text-slate-400">
                     <th scope="col" className="px-3 py-3 font-medium sm:px-5">Coin</th>
                     <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">Price</th>
-                    <th scope="col" className="px-3 py-3 text-right font-medium sm:px-5">24h</th>
+                    <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">24h</th>
                     <th scope="col" className="hidden px-3 py-3 text-right font-medium sm:px-5 sm:table-cell">
                       Market cap
                     </th>
@@ -138,10 +138,16 @@ export default function Watchlist() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-white sm:px-5">
+                        <td className="px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:hidden">
+                          <p>{coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}</p>
+                          <p className={`text-xs ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
+                            {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
+                          </p>
+                        </td>
+                        <td className="hidden px-3 py-3 text-right tabular-nums text-white sm:px-5 sm:table-cell">
                           {coin ? formatPrice(coin.current_price) : <span className="text-slate-400">—</span>}
                         </td>
-                        <td className={`px-3 py-3 text-right tabular-nums sm:px-5 ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
+                        <td className={`hidden px-3 py-3 text-right tabular-nums sm:px-5 sm:table-cell ${coin ? trendClass(coin.price_change_percentage_24h) : 'text-slate-400'}`}>
                           {coin ? formatPercent(coin.price_change_percentage_24h) : '—'}
                         </td>
                         <td className="hidden px-3 py-3 text-right tabular-nums text-slate-300 sm:px-5 sm:table-cell">

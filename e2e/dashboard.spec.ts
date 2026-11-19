@@ -287,5 +287,24 @@ test('keeps portfolio amounts intact and holding values visible on a narrow phon
   const holding = page.getByRole('row', { name: /Bitcoin BTC/ });
   await expect(holding.locator('p').filter({ hasText: /^\$32,500\.00$/ })).toBeVisible();
   await expect(holding.getByText('Value', { exact: true })).toBeVisible();
+  await expect(holding.locator('td:visible p').filter({ hasText: /^\+\$12,500\.00$/ })).toBeVisible();
+  const table = page.getByRole('table', { name: 'Portfolio holdings and performance' });
+  expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const heading = page.getByRole('heading', { name: 'CryptoFlow Analytics', level: 1 });
+  expect(await heading.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  const clock = page.getByText(/^\d{2}:\d{2}:\d{2} (AM|PM)$/);
+  expect(await clock.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+test('keeps watchlist prices and changes together without sideways scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await page.goto('/?tab=watchlist');
+  await page.getByLabel('Add coin').selectOption('bitcoin');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  const holding = page.getByRole('row', { name: /Bitcoin BTC/ });
+  await expect(holding.locator('td:visible').getByText('$65,000.00', { exact: true })).toBeVisible();
+  await expect(holding.locator('td:visible').getByText('+2.40%', { exact: true })).toBeVisible();
+  const table = page.getByRole('table', { name: 'Tracked cryptocurrencies' });
+  expect(await table.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 

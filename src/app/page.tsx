@@ -27,9 +27,9 @@ export default async function Home({ searchParams }: PageProps<'/'>) {
     <div className="min-h-screen bg-slate-900">
       <header className="sticky top-0 z-50 border-b border-slate-700 bg-slate-900">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-4 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-2 py-3 sm:gap-4 sm:py-4">
             <div className="min-w-0">
-              <h1 translate="no" className="truncate text-lg font-bold text-white sm:text-2xl">
+              <h1 translate="no" className="truncate text-base font-bold text-white sm:text-2xl">
                 CryptoFlow Analytics
               </h1>
               <p className="hidden text-sm text-slate-400 sm:block">
