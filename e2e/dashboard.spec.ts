@@ -154,3 +154,30 @@ test('describes real watchlist coverage and dashboard-only alert checks', async 
   await expect(page.getByText(/Create a target to see when its price crosses/)).toBeVisible();
 });
 
+test('restores deleted holdings, watchlist entries, and alerts with Undo', async ({ page }) => {
+  await page.goto('/?tab=portfolio');
+  await page.getByRole('button', { name: 'Add asset' }).first().click();
+  await page.getByLabel('Quantity', { exact: true }).fill('0.5');
+  await page.getByLabel('Purchase price (USD)').fill('40000');
+  await page.getByRole('button', { name: 'Save asset' }).click();
+  await page.getByRole('button', { name: 'Remove Bitcoin', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Bitcoin BTC' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Watchlist' }).click();
+  await page.getByLabel('Add coin').selectOption('solana');
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove Solana from watchlist' }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Solana SOL' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Alerts' }).click();
+  await page.getByRole('button', { name: 'New alert' }).first().click();
+  await page.getByLabel('Target price (USD)').fill('70000');
+  await page.locator('form').getByRole('button', { name: 'Create alert', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete Bitcoin alert' }).click();
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: /Bitcoin.*BTC/ })).toBeVisible();
+});
+

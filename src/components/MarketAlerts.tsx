@@ -16,6 +16,8 @@ import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 import { useAlertsData } from '@/hooks/useAlertsData';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
+import { UndoNotice } from './ui/UndoNotice';
 
 interface DraftAlert {
   cryptoId: string;
@@ -31,6 +33,12 @@ export default function MarketAlerts() {
   const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftAlert>(EMPTY_DRAFT);
   const [errors, setErrors] = useState<FieldErrors<'targetPrice'>>({});
+  const undoDelete = useUndoDelete({
+    items: alerts,
+    remove: deleteAlert,
+    restore: addAlert,
+    describe: (alert) => `${coinLabel(alert.cryptoId)} alert`,
+  });
 
   const ids = useMemo(() => [...new Set(alerts.map((alert) => alert.cryptoId))], [alerts]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -75,12 +83,18 @@ export default function MarketAlerts() {
     if (field === 'targetPrice') setErrors({});
   }
 
-  async function handleDelete(id: string) {
-    await deleteAlert(id);
-  }
-
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-white">Market alerts</h2>
@@ -254,8 +268,8 @@ export default function MarketAlerts() {
                 <IconButton
                   label={`Delete ${coinLabel(alert.cryptoId)} alert`}
                   variant="danger"
-                  disabled={pending}
-                  onClick={() => handleDelete(alert.id)}
+                  disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                  onClick={() => void undoDelete.deleteItem(alert.id)}
                 >
                   <FiTrash2 size={16} aria-hidden="true" />
                 </IconButton>

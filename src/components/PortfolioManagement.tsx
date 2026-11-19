@@ -9,12 +9,14 @@ import { computeAllocation, computeRows, computeStats } from '@/lib/portfolio';
 import { firstInvalidField, positiveAmountError, type FieldErrors } from '@/lib/formValidation';
 import { MAX_POSITIVE_AMOUNT } from '@/lib/userDataSchemas';
 import { useExpandedForm } from '@/hooks/useExpandedForm';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
 import { Button, IconButton } from './ui/Button';
 import { Card, CardHeader } from './ui/Card';
 import { EmptyState } from './ui/EmptyState';
 import { Field, Input, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
+import { UndoNotice } from './ui/UndoNotice';
 import { usePortfolioData } from '@/hooks/usePortfolioData';
 
 interface DraftHolding {
@@ -32,6 +34,12 @@ export default function PortfolioManagement() {
   const { open: showForm, formRef, openForm, closeForm, toggleForm } = useExpandedForm();
   const [draft, setDraft] = useState<DraftHolding>(EMPTY_DRAFT);
   const [errors, setErrors] = useState<FieldErrors<HoldingField>>({});
+  const undoDelete = useUndoDelete({
+    items: holdings,
+    remove: deleteHolding,
+    restore: addHolding,
+    describe: (holding) => `${coinLabel(holding.cryptoId)} holding`,
+  });
 
   const ids = useMemo(() => [...new Set(holdings.map((h) => h.cryptoId))], [holdings]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -90,12 +98,18 @@ export default function PortfolioManagement() {
     }
   }
 
-  async function handleDelete(id: string) {
-    await deleteHolding(id);
-  }
-
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-white">Portfolio management</h2>
@@ -268,8 +282,8 @@ export default function PortfolioManagement() {
                         <IconButton
                           label={`Remove ${coinLabel(row.cryptoId)}`}
                           variant="danger"
-                          disabled={pending}
-                          onClick={() => handleDelete(row.id)}
+                          disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                          onClick={() => void undoDelete.deleteItem(row.id)}
                         >
                           <FiTrash2 size={16} aria-hidden="true" />
                         </IconButton>

@@ -14,10 +14,18 @@ import { Field, Select } from './ui/Field';
 import { StatTile } from './ui/StatTile';
 import { DataNotice, FreshnessLabel } from './ui/DataNotice';
 import { useWatchlistData } from '@/hooks/useWatchlistData';
+import { useUndoDelete } from '@/hooks/useUndoDelete';
+import { UndoNotice } from './ui/UndoNotice';
 
 export default function Watchlist() {
   const { entries, status, pending, error: storageError, addEntry, deleteEntry, resetInvalid } = useWatchlistData();
   const [pendingCoin, setPendingCoin] = useState('');
+  const undoDelete = useUndoDelete({
+    items: entries,
+    remove: deleteEntry,
+    restore: addEntry,
+    describe: (entry) => `${coinLabel(entry.cryptoId)} from your watchlist`,
+  });
 
   const ids = useMemo(() => [...new Set(entries.map((entry) => entry.cryptoId))], [entries]);
   const { coins, loading, error, updatedAt, freshness, refresh } = useMarketCoins(ids);
@@ -37,12 +45,18 @@ export default function Watchlist() {
     setPendingCoin('');
   }
 
-  async function removeCoin(id: string) {
-    await deleteEntry(id);
-  }
-
   return (
     <div className="space-y-5">
+      {undoDelete.deleted && (
+        <UndoNotice
+          label={undoDelete.deleted.label}
+          pending={undoDelete.pending}
+          error={undoDelete.error}
+          undoRef={undoDelete.undoRef}
+          onUndo={() => void undoDelete.undo()}
+          onDismiss={undoDelete.dismiss}
+        />
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-white">Watchlist</h2>
@@ -137,8 +151,8 @@ export default function Watchlist() {
                           <IconButton
                             label={`Remove ${coinLabel(entry.cryptoId)} from watchlist`}
                             variant="danger"
-                            disabled={pending}
-                            onClick={() => removeCoin(entry.id)}
+                            disabled={pending || undoDelete.pending || undoDelete.deleted !== null}
+                            onClick={() => void undoDelete.deleteItem(entry.id)}
                           >
                             <FiTrash2 size={16} aria-hidden="true" />
                           </IconButton>
