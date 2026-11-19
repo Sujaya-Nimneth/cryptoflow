@@ -38,6 +38,22 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Start local Supabase
+        run: npm run db:start
+
+      - name: Publish local Supabase configuration
+        run: |
+          npm run supabase -- status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            | sed -n '/^NEXT_PUBLIC_SUPABASE_\(URL\|PUBLISHABLE_KEY\)=/p' >> "$GITHUB_ENV"
+
+      - name: Test database policies
+        run: npm run db:test
+
+      - name: Check database advisors
+        run: npm run db:advisors
+
       - name: Build
         run: npm run build
 
@@ -45,6 +61,9 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Browser regression tests
+        env:
+          E2E_SUPABASE_URL: ${{ env.NEXT_PUBLIC_SUPABASE_URL }}
+          E2E_SUPABASE_PUBLISHABLE_KEY: ${{ env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run test:e2e
 
       - name: Upload browser failure artifacts
@@ -56,3 +75,7 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+      - name: Stop local Supabase
+        if: always()
+        run: npm run supabase -- stop --no-backup
